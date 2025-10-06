@@ -14,12 +14,13 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
 
   const width = 800;
   const height = 450;
-  const margin = { top: 60, right: 120, bottom: 100, left: 70 };
+  const margin = { top: 60, right: 30, bottom: 60, left: 80 };
 
   const svg = d3.select("#viz-container")
     .append("svg")
     .attr("width", width)
-    .attr("height", height);
+    .attr("height", height)
+    .attr("class", "viz-content");
 
   // Conteneur pour les axes
   const gX = svg.append("g").attr("transform", `translate(0,${height - margin.bottom})`);
@@ -31,6 +32,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     .attr("y", margin.top / 2)
     .attr("text-anchor", "middle")
     .attr("font-size", "16px")
+    .attr("class", 'chart-text')
     .text("Évolution du prix moyen et prix moyen au m² selon l'année de construction");
 
   // Tooltip
@@ -45,7 +47,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
 
   // Fonction pour filtrer et mettre à jour
   function updateChart() {
-    console.log('update')
     let filtered = data;
     if (selectedCountry !== "All") filtered = filtered.filter(d => d.country === selectedCountry);
     if (selectedType !== "All") filtered = filtered.filter(d => d.property_type === selectedType);
@@ -54,26 +55,24 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     const avgData = d3.rollups(
       filtered,
       v => ({
-        avgPrice: d3.mean(v, d => d.price),                         // prix moyen total
-        avgPricePerSqft: d3.mean(v, d => d.price / (d.property_size_sqft * 0.092903)) // prix moyen au m²
+        avgPrice: d3.mean(v, d => d.price),
+        avgPricePerSqft: d3.mean(v, d => d.price / (d.property_size_sqft * 0.092903))
       }),
       d => d.constructed_year
     ).map(([year, values]) => ({ year, ...values }))
-      .sort((a,b) => a.year - b.year);
-
-    // Log dans la console
-    console.log("Prix moyen et prix moyen au m² par année :");
-    avgData.forEach(d => {
-      console.log(`Année ${d.year}: Prix moyen €${d.avgPrice.toFixed(2)}, Prix moyen/m² €${d.avgPricePerSqft.toFixed(2)}`);
-    });
+      .sort((a, b) => a.year - b.year);
 
     // Échelles
     const x = d3.scaleLinear()
       .domain(d3.extent(avgData, d => d.year))
       .range([margin.left, width - margin.right]);
 
+    const yValues = avgData.map(d => normalizeBySize ? d.avgPricePerSqft : d.avgPrice);
+    const yMin = d3.min(yValues);
+    const yMax = d3.max(yValues);
+
     const y = d3.scaleLinear()
-      .domain([0, d3.max(avgData, d => normalizeBySize ? d.avgPricePerSqft : d.avgPrice) * 1.1])
+      .domain([yMin, yMax])
       .range([height - margin.bottom, margin.top]);
 
     gX.transition().duration(500).call(d3.axisBottom(x).tickFormat(d3.format("d")));
@@ -85,7 +84,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       .y(d => y(normalizeBySize ? d.avgPricePerSqft : d.avgPrice))
       .curve(d3.curveMonotoneX);
 
-    // DATA JOIN ligne
     let path = svg.selectAll(".line").data([avgData]);
 
     path.enter()
@@ -94,20 +92,20 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       .merge(path)
       .transition().duration(500)
       .attr("fill", "none")
-      .attr("stroke", "steelblue")
+      .attr("stroke", "var(--dark-blue)")
       .attr("stroke-width", 2)
       .attr("d", line);
 
     path.exit().remove();
 
-    // DATA JOIN cercles
+    // Cercles
     let circles = svg.selectAll(".dot").data(avgData, d => d.year);
 
     circles.enter()
       .append("circle")
       .attr("class", "dot")
       .attr("r", 4)
-      .attr("fill", "orange")
+      .attr("fill", "var(--orange)")
       .merge(circles)
       .transition().duration(500)
       .attr("cx", d => x(d.year))
@@ -129,47 +127,40 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   // Ajouter les controls
   const controls = d3.select("#viz-container")
     .append("div")
-    .style("margin-top", "15px")
-    .style("display", "flex")
-    .style("gap", "20px");
+    .attr("class", "controls-container");
 
-  // Dropdown pays
-  const countries = ["All", ...Array.from(new Set(data.map(d => d.country)))];
-  const countryLabel = controls.append("label")
-    .text("Pays: ");
-
-  const countrySelect = countryLabel.append("select")
+  // Dropdown pays avec icône
+  const countryWrapper = controls.append("div").attr("class", "select-wrapper");
+  countryWrapper.append("select")
     .on("change", function() {
       selectedCountry = this.value;
       updateChart();
       countPropertiesByPrice(selectedCountry, data);
-    });
-
-  countrySelect.selectAll("option")
-    .data(countries)
+    })
+    .selectAll("option")
+    .data(["All", ...Array.from(new Set(data.map(d => d.country)))])
     .enter()
     .append("option")
     .text(d => d)
     .attr("value", d => d);
 
-  // Dropdown type de bien
-  const types = ["All", ...Array.from(new Set(data.map(d => d.property_type)))];
-  const typeLabel = controls.append("label")
-    .text("Type: ");
+  countryWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
-  const typeSelect = typeLabel.append("select")
+  // Dropdown type de bien avec icône
+  const typeWrapper = controls.append("div").attr("class", "select-wrapper");
+  typeWrapper.append("select")
     .on("change", function() {
       selectedType = this.value;
       updateChart();
-    });
-
-  typeSelect.selectAll("option")
-    .data(types)
+    })
+    .selectAll("option")
+    .data(["All", ...Array.from(new Set(data.map(d => d.property_type)))])
     .enter()
     .append("option")
     .text(d => d)
     .attr("value", d => d);
 
+  typeWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
   // Toggle normalisation
   controls.append("label")
@@ -186,13 +177,12 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
 function countPropertiesByPrice(country, data) {
   const filtered = country === "All" ? data : data.filter(d => d.country === country);
 
-  // Définir les intervalles de prix
   const ranges = [
     { min: 0, max: 500000 },
     { min: 500000, max: 1000000 },
     { min: 1000000, max: 1500000 },
     { min: 1500000, max: 2000000 },
-    { min: 2000000, max: Infinity } // tout ce qui est > 2M
+    { min: 2000000, max: Infinity }
   ];
 
   const counts = ranges.map(r => ({
