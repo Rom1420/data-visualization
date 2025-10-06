@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Global House Purchase Decision</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Global House Purchase Decision Dashboard</h1>
+    <nav>
+      <button onclick="loadViz('maxime')">Prix moyen au m²</button>
+      <button onclick="loadViz('matice')">Densité des biens</button>
+      <button onclick="loadViz('julien')">Attractivité</button>
+      <button onclick="loadViz('romain')">Historique des prix</button>
+      <button onclick="loadViz('antoine')">Value-for-Money</button>
+    </nav>
+  </header>
+
+  <main id="viz-container">
+    <p>Sélectionnez une visualisation ci-dessus.</p>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
