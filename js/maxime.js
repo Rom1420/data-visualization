@@ -73,22 +73,6 @@ function aggByCity(data) {
   return rolled.map(([city, s]) => ({ city, ...s }));
 }
 
-// (si tu n’utilises plus le chart “par type”, tu peux supprimer cette agg)
-function aggByTypeInCity(data, city) {
-  const rows = data.filter(d => d.city === city);
-  const rolled = d3.rollups(
-    rows,
-    v => ({
-      n: v.length,
-      avg_price_per_m2: d3.mean(v, d => d.price_per_m2),
-      avg_price: d3.mean(v, d => d.price),
-      avg_size_m2: d3.mean(v, d => d.size_m2)
-    }),
-    d => d.type
-  );
-  return rolled.map(([type, s]) => ({ type, city, ...s }));
-}
-
 // ------------------------- LAYOUT -------------------------
 function mountSplitLayout() {
   const host = d3.select("#viz-container").html("");
@@ -96,17 +80,11 @@ function mountSplitLayout() {
   const wrap = host.append("div").attr("class", "viz-card ghpd");
   const split = wrap.append("div").attr("class", "split");
 
-  const leftCol = split.append("div").attr("class", "col-left");
-  const leftTop = leftCol.append("section").attr("class", "panel");
+  // Un seul panneau (pleine largeur)
+  const leftTop = split.append("section").attr("class", "panel");
   leftTop.append("h2").text("Prix moyen au m² par ville (pays indiqué)");
 
-  // colonne droite : détails
-  const rightDetail = split.append("section").attr("class", "detail");
-  rightDetail.append("h3").text("Détails");
-  rightDetail.append("div").attr("class", "kpis");
-  rightDetail.append("div").attr("class", "detail-table");
-
-  return { leftTop, detail: rightDetail };
+  return { leftTop };
 }
 
 // ------------------------- MODAL -------------------------
@@ -179,38 +157,91 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
     return arr.map(([type, o]) => ({ city, type, n: o.n, share: o.n / total, avg_ppm2: o.avg_ppm2, avg_price: o.avg_price, avg_size: o.avg_size }));
   });
 
-  const cityCountry = new Map(byCity.map(d => [d.city, d.country]));
+  // --- Pays disponibles & pagination ---
+  const countriesAll = Array.from(new Set(byCity.map(d => d.country))).sort((a,b)=>d3.ascending(a,b));
+  const COUNTRIES_PER_PAGE = 3;
+  const totalPages = Math.max(1, Math.ceil(countriesAll.length / COUNTRIES_PER_PAGE));
+  let page = 0; // state: index de page (0..totalPages-1)
 
-  // UI
+  const countriesOfPage = p =>
+    countriesAll.slice(p * COUNTRIES_PER_PAGE, p * COUNTRIES_PER_PAGE + COUNTRIES_PER_PAGE);
+
+  // UI (controls haut)
   const controls = container.append("div").attr("class", "controls");
-  const countrySel = controls.append("label").html("<span>Pays</span>").append("select");
-  const countries = ["ALL", ...Array.from(new Set(byCity.map(d => d.country))).sort()];
-  countries.forEach(c => countrySel.append("option").attr("value", c).text(c));
 
   const searchWrap = controls.append("label");
   searchWrap.append("span").text("Ville");
   const searchInput = searchWrap.append("input").attr("type","search").attr("placeholder","Paris, Madrid…");
 
-  const sortSel = controls.append("label").html("<span>Tri</span>").append("select");
-  [["vol_desc","Volume ↓"],["ppm2_desc","Prix/m² ↓"],["az","Ville A→Z"]]
-    .forEach(([v,t]) => sortSel.append("option").attr("value", v).text(t));
-
+  // bouton reset (annule le focus)
   controls.append("button")
     .attr("type","button")
-    .text("Reset zoom")
-    .on("click", () => { zoomDomain = [0,1]; activeTile = null; onZoom?.(null); update(); });
+    .text("Reset")
+    .on("click", () => {
+      activeTile = null;
+      updateLegendCursor(null); // <<< ADDED
+      update();
+      onZoom?.(null);
+    });
 
-  // Légende dégradé (prix/m²)
-  const legend = container.append("div").style("margin","6px 0 8px");
-  const legendSvg = legend.append("svg").attr("width","100%").attr("height",36);
-
-  const margin = { top: 50, right: 12, bottom: 32, left: 12 };
+  // marges
+  const margin = { top: 64, right: 12, bottom: 56, left: 12 }; // bottom ↑ pour le menu de pagination
   const svg = container.append("svg").attr("width","100%").attr("height",460);
   const g = svg.append("g");
   const gx = g.append("g").attr("class","axis x");
-  const brushG = g.append("g").attr("class","brush");      // brush DERRIÈRE
-  const tilesG = g.append("g").attr("class","tiles");       // tuiles
-  const labelsG = g.append("g").attr("class","labels");     // labels villes
+  const tilesG = g.append("g").attr("class","tiles");
+  const countryBandsG = g.append("g").attr("class","country-bands");
+
+  // Légende dégradé
+  const legendBottom = container.append("div").style("margin","8px 0 0");
+  const legendSvg = legendBottom.append("svg").attr("width","100%").attr("height",40);
+
+  // <<< ADDED: état & helpers du curseur de légende
+  const legendState = {
+    scale: null,   // d3.scaleLinear cmin..cmax -> px
+    gLane: null,   // groupe de la piste
+    gCursor: null, // groupe curseur
+    h: 16,
+    last: null     // { val, city, fill } pour repositionner au resize
+  };
+  // >>> END ADDED
+
+  // --- Menu de pagination (bas) ---
+  const pager = container.append("div").attr("class","pager").style("display","flex").style("gap","8px").style("align-items","center").style("justify-content","center").style("margin","8px 0 0");
+  const btnPrev = pager.append("button").attr("type","button").text("◀ Précédent");
+  const pageInfo = pager.append("span").attr("class","page-info").style("min-width","140px").style("text-align","center");
+  const dotsWrap = pager.append("div").style("display","flex").style("gap","6px").style("align-items","center");
+  const btnNext = pager.append("button").attr("type","button").text("Suivant ▶");
+
+  function renderDots() {
+    const dots = dotsWrap.selectAll("button.pdot").data(d3.range(totalPages));
+    dots.exit().remove();
+    dots.enter().append("button")
+      .attr("class","pdot")
+      .style("width","10px").style("height","10px")
+      .style("border-radius","50%")
+      .style("border","1px solid #999")
+      .style("background","#eee")
+      .on("click", (_, i)=>{ page = i; activeTile = null; updateLegendCursor(null); update(); updatePager(); })
+      .merge(dots)
+      .style("background", d => d===page ? "#111" : "#eee")
+      .style("border-color", d => d===page ? "#111" : "#999");
+  }
+
+  function updatePager() {
+    const curCountries = countriesOfPage(page);
+    pageInfo.text(`Page ${page+1} / ${totalPages} — ${curCountries.join(", ")}`);
+    btnPrev.attr("disabled", page<=0 ? true : null);
+    btnNext.attr("disabled", page>=totalPages-1 ? true : null);
+    renderDots();
+  }
+
+  btnPrev.on("click", () => {
+    if (page>0) { page--; activeTile = null; updateLegendCursor(null); update(); updatePager(); }
+  });
+  btnNext.on("click", () => {
+    if (page<totalPages-1) { page++; activeTile = null; updateLegendCursor(null); update(); updatePager(); }
+  });
 
   const tooltip = d3.select("body").append("div").attr("class","tooltip");
 
@@ -220,12 +251,12 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
   const cmax = d3.quantile(allP, 0.95) ?? d3.max(allP) ?? 1;
   const color = d3.scaleSequential(d3.interpolateTurbo).domain([cmin, cmax]);
 
-  const countriesDomain = Array.from(new Set(byCity.map(d => d.country))).sort();
-  const countryColor = d3.scaleOrdinal().domain(countriesDomain).range(d3.schemeTableau10);
-
+  // <<< UPDATED: Légende + curseur
   function renderLegend() {
     const { width } = legendSvg.node().getBoundingClientRect();
     const w = Math.max(240, width - 10), h = 16;
+    legendState.h = h;
+
     legendSvg.selectAll("*").remove();
     const defs = legendSvg.append("defs");
     const gradId = "ppm2-grad";
@@ -235,40 +266,94 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
       lg.append("stop").attr("offset",(t*100)+"%").attr("stop-color", color(cmin + t*(cmax-cmin)));
     }
     const gL = legendSvg.append("g").attr("transform","translate(0,8)");
+    legendState.gLane = gL;
+
     gL.append("rect").attr("x",5).attr("y",0).attr("width",w).attr("height",h).attr("rx",4).attr("fill",`url(#${gradId})`);
+
     const scale = d3.scaleLinear().domain([cmin,cmax]).range([5,w+5]);
+    legendState.scale = scale;
+
     gL.append("g").attr("transform",`translate(0,${h})`)
       .call(d3.axisBottom(scale).ticks(6).tickFormat(moneyPer))
       .select(".domain").remove();
+
+    // curseur (créé à chaque renderLegend)
+    const gCur = gL.append("g").attr("class","legend-cursor").style("display","none");
+    legendState.gCursor = gCur;
+
+    gCur.append("line").attr("class","cur-line").attr("y1",-6).attr("y2",h).attr("stroke","#111").attr("stroke-width",2);
+    gCur.append("path").attr("class","cur-head").attr("d","M0,-10 l6,10 l-12,0 z").attr("fill","#111").attr("stroke","#111").attr("stroke-width",0.6);
+
+    const gLab = gCur.append("g").attr("class","cur-label").attr("transform","translate(0,-14)");
+    gLab.append("rect").attr("class","lab-bg").attr("rx",4).attr("ry",4).attr("fill","#111").attr("opacity",0.9);
+    gLab.append("text").attr("class","lab-txt").attr("text-anchor","middle").style("font-weight","600").style("fill","#fff");
+
+    // Repositionner si on connaît la dernière valeur (resize)
+    if (legendState.last != null) {
+      const { val, city, fill } = legendState.last;
+      updateLegendCursor(val, city, fill);
+    }
   }
-  renderLegend(); window.addEventListener("resize", renderLegend);
+  renderLegend();
+  window.addEventListener("resize", renderLegend);
+  // >>> END UPDATED
 
-  // Légende des pays (pastilles)
-  const countryLegend = container.append("div")
-    .attr("class","country-legend")
-    .style("display","flex").style("flex-wrap","wrap").style("gap","8px").style("margin","4px 0 8px");
-  countriesDomain.forEach(c => {
-    const item = countryLegend.append("div")
-      .style("display","inline-flex").style("align-items","center").style("gap","6px").style("font-size","12px");
-    item.append("span")
-      .style("display","inline-block").style("width","10px").style("height","10px")
-      .style("border-radius","999px").style("background", countryColor(c));
-    item.append("span").text(c);
-  });
+  // <<< ADDED: mise à jour du curseur
+  function updateLegendCursor(val, city, fill) {
+    const scale = legendState.scale;
+    const gCur = legendState.gCursor;
+    if (!scale || !gCur) return;
 
-  // State
-  let zoomDomain = [0,1];            // zoom horizontal (part cumulée)
-  let activeTile = null;             // {city, type} pour highlight + label
+    if (val == null || !Number.isFinite(val)) {
+      gCur.style("display","none");
+      legendState.last = null;
+      return;
+    }
+    const x = scale(val);
+    gCur.style("display", null).attr("transform", `translate(${x},0)`);
+    const stroke = d3.color(fill || "#111")?.darker(0.6) || "#000";
+    gCur.select(".cur-line").attr("stroke", fill || "#111");
+    gCur.select(".cur-head").attr("fill", fill || "#111").attr("stroke", stroke);
+
+    const lab = gCur.select(".cur-label");
+    const txt = lab.select(".lab-txt").text(`${city}: ${moneyPer(val)}`);
+    const bb = txt.node().getBBox();
+    const padX = 6, padY = 4;
+    lab.select(".lab-bg")
+      .attr("x", bb.x - padX)
+      .attr("y", bb.y - padY)
+      .attr("width", bb.width + 2*padX)
+      .attr("height", bb.height + 2*padY)
+      .attr("fill", d3.color(fill||"#111")?.darker(0.7).formatHex() || "#111");
+
+    legendState.last = { val, city, fill };
+  }
+  // >>> END ADDED
+
+  // ------------ State ------------
+  let activeTile = null; // { city, type } ou null
 
   function filteredCities() {
-    const c = countrySel.node().value;
     const q = searchInput.node().value.trim().toLowerCase();
-    let rows = byCity.filter(d => (c==="ALL" || d.country===c) && (!q || d.city.toLowerCase().includes(q)));
-    const mode = sortSel.node().value;
-    if (mode==="vol_desc") rows = d3.sort(rows, d => -d.n);
-    else if (mode==="ppm2_desc") rows = d3.sort(rows, d => -(d.avg_ppm2 ?? 0));
-    else rows = d3.sort(rows, d => d.city);
+    const visibleCountries = new Set(countriesOfPage(page));
+    let rows = byCity.filter(d =>
+      visibleCountries.has(d.country) &&
+      (!q || d.city.toLowerCase().includes(q))
+    );
+    rows = rows.slice().sort((a,b) =>
+      d3.ascending(a.country, b.country) ||
+      d3.descending(a.n, b.n) ||
+      d3.ascending(a.city, b.city)
+    );
     return rows;
+  }
+
+  // util couleur texte selon luminance de fond
+  function textColorFor(bg) {
+    const c = d3.color(bg);
+    if (!c) return "#fff";
+    const L = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+    return L < 0.6 ? "#fff" : "#111";
   }
 
   function update() {
@@ -283,55 +368,128 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
     svg.attr("height", H);
     g.attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = d3.scaleLinear().domain(zoomDomain).range([0, innerW]);
+    // === Largeurs base par ville (en pixels) ===
+    const baseCols = [];
+    for (const d of cities) {
+      baseCols.push({
+        city: d.city,
+        country: d.country,
+        n: d.n,
+        wBase: (d.n / totalN) * innerW
+      });
+    }
 
-    // bandes cumulées par ville
-    let acc = 0;
-    const cityBands = cities.map(d => {
-      const x0 = acc / totalN, x1 = (acc + d.n) / totalN; acc += d.n;
-      return { city: d.city, country: d.country, n: d.n, x0, x1 };
+    // === Fish-eye horizontal : bonus de largeur pour la ville active ===
+    const activeCity = activeTile?.city || null;
+    let cols = baseCols.map(d => ({ ...d, w: d.wBase }));
+    if (activeCity) {
+      const idx = cols.findIndex(c => c.city === activeCity);
+      if (idx >= 0) {
+        const wBaseActive = cols[idx].wBase;
+        const othersBaseSum = innerW - wBaseActive;
+        const bonusW = Math.min(
+          Math.max(24, innerW * 0.06),
+          Math.max(120, innerW * 0.12)
+        );
+        const wActive = Math.min(innerW - 2, wBaseActive + bonusW);
+        const remainW = innerW - wActive;
+
+        cols = cols.map((c, i) => {
+          if (i === idx) return { ...c, w: wActive };
+          const p = othersBaseSum <= 0 ? 0 : c.wBase / othersBaseSum;
+          return { ...c, w: Math.max(1, remainW * p) };
+        });
+      }
+    }
+
+    // === Positions cumulées X en pixels ===
+    let xAcc = 0;
+    const cityBandsPx = cols.map(c => {
+      const x0px = xAcc;
+      xAcc += c.w;
+      return { city: c.city, country: c.country, n: c.n, x0px, wpx: c.w, x1px: xAcc };
     });
 
-    // Axe %
+    // ---- Axe % (cosmétique, fixe 0..1) ----
     gx.attr("transform", `translate(0,${innerH})`)
-      .call(d3.axisBottom(d3.scaleLinear().domain(zoomDomain).range([0, innerW]))
+      .call(d3.axisBottom(d3.scaleLinear().domain([0,1]).range([0, innerW]))
         .ticks(6).tickFormat(d3.format(".0%")))
       .select(".domain").remove();
 
-    // Colonnes
-    const col = tilesG.selectAll(".mekko-col").data(cityBands, d => d.city);
+    // ---- Colonnes (villes) ----
+    const col = tilesG.selectAll(".mekko-col").data(cityBandsPx, d => d.city);
     col.exit().remove();
     const colEnter = col.enter().append("g").attr("class","mekko-col");
-    const columns = colEnter.merge(col).attr("transform", d => `translate(${x(d.x0)},0)`);
+    colEnter.merge(col)
+      .transition().duration(180)
+      .attr("transform", d => `translate(${d.x0px},0)`);
 
     // Données par ville
-    const dataByCity = d3.group(byCityType.filter(r => cityBands.some(cb => cb.city===r.city)), d => d.city);
+    const dataByCity = d3.group(
+      byCityType.filter(r => cityBandsPx.some(cb => cb.city===r.city)),
+      d => d.city
+    );
 
-    columns.each(function(cb) {
-      const gCity = d3.select(this);
+    // Pour chaque ville, layout vertical + dessin
+    cityBandsPx.forEach(cb => {
+      const gCity = tilesG.selectAll(".mekko-col").filter(d => d.city === cb.city);
       const rows = (dataByCity.get(cb.city) || []).sort((a,b) => d3.descending(a.share,b.share));
+
+      // empilement de base (0..1)
       let cum = 0;
       const stacked = rows.map(r => { const y0 = cum; cum += r.share; const y1 = cum; return { ...r, y0, y1 }; });
 
-      const y = d3.scaleLinear().domain([0,1]).range([innerH, 0]);
+      // Hauteurs en pixels (base)
+      const baseHeights = stacked.map(d => ({
+        type: d.type,
+        h: (d.y1 - d.y0) * innerH,
+        y0: d.y0
+      }));
+      const totalH = innerH;
 
-      // group "tile" -> rect + label (text)
-      const tiles = gCity.selectAll("g.mekko-tile").data(stacked, d => d.type);
+      // Agrandissement vertical de la tuile active dans cette colonne
+      const activeHere = activeTile && activeTile.city === cb.city ? activeTile.type : null;
+      let adjHeights = baseHeights.map(d => ({ ...d }));
+      if (activeHere) {
+        const idx = adjHeights.findIndex(d => d.type === activeHere);
+        if (idx >= 0) {
+          const bonusH = Math.min(Math.max(24, innerH * 0.12), Math.max(60, innerH * 0.25));
+          const hActiveBase = adjHeights[idx].h;
+          const othersSum = totalH - hActiveBase;
+          const hActive = Math.min(totalH - 2, hActiveBase + bonusH);
+          const remain = totalH - hActive;
+
+          adjHeights = adjHeights.map((d, i) => {
+            if (i === idx) return { ...d, h: hActive };
+            const p = othersSum <= 0 ? 0 : d.h / othersSum;
+            return { ...d, h: Math.max(1, remain * p) };
+          });
+        }
+      }
+
+      // Positions Y cumulées recalculées en pixels
+      let yAcc = 0;
+      const layout = stacked.map((d, i) => {
+        const h = adjHeights[i].h;
+        const yTop = innerH - (yAcc + h);
+        yAcc += h;
+        return { ...d, yPx: yTop, hPx: h };
+      });
+
+      const tiles = gCity.selectAll("g.mekko-tile").data(layout, d => d.type);
       tiles.exit().remove();
-
-      const widthPx = Math.max(1, x(cb.x1) - x(cb.x0));
 
       const tEnter = tiles.enter().append("g").attr("class","mekko-tile")
         .on("mouseenter", (_, d) => {
           activeTile = { city: cb.city, type: d.type };
-          // zoom directement sur la colonne de la ville
-          zoomDomain = [cb.x0, cb.x1];
+          updateLegendCursor(d.avg_ppm2, cb.city, color(d.avg_ppm2)); // <<< ADDED
           update();
         })
         .on("mousemove", (event, d) => {
           const share = d3.format(".0%")(d.share);
+          const countryForCity = cols.find(c => c.city===cb.city)?.country || "";
           tooltip.html(
-            `<div><strong>${cb.city}</strong> — ${cityCountry.get(cb.city)}</div>
+            `<div><strong>${cb.city}</strong> — ${countryForCity}</div>
              <div><em>${d.type}</em> • part: ${share}</div>
              <div>Prix/m² moyen: ${moneyPer(d.avg_ppm2)}</div>
              <div>Prix moyen: ${money(d.avg_price)} • Taille: ${nf1(d.avg_size)} m²</div>
@@ -341,26 +499,48 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
           .style("top", (event.clientY+14)+"px")
           .style("opacity", 1);
         })
-        .on("mouseleave", () => tooltip.style("opacity",0))
+        .on("mouseleave", () => {
+          tooltip.style("opacity",0);
+          activeTile = null;
+          updateLegendCursor(null); // <<< ADDED
+          update();
+        })
         .on("click", (_, d) => {
           onSelect?.({ city: cb.city, type: d.type });
           openTileModal(dataAll, { city: cb.city, type: d.type, colorHex: color(d.avg_ppm2) });
         });
 
+      // Rect de la tuile
       tEnter.append("rect");
-      tEnter.append("text").attr("class","tile-label")
+
+      // ===== Label avec fond =====
+      const labelG = tEnter.append("g")
+        .attr("class","tile-label")
+        .style("pointer-events","none");
+
+      labelG.append("rect")
+        .attr("class","label-bg")
+        .attr("rx",6).attr("ry",6)
+        .attr("opacity",1);
+
+      const label = labelG.append("text")
         .attr("text-anchor","middle")
         .style("font-weight","600")
         .style("paint-order","stroke")
-        .style("stroke","#fff").style("stroke-width","3px").style("stroke-linejoin","round");
+        .style("stroke","#000").style("stroke-width","2px").style("stroke-linejoin","round");
+
+      label.append("tspan").attr("class","tl1").attr("x", 0).attr("dy", 0);
+      label.append("tspan").attr("class","tl2").attr("x", 0).attr("dy", "1.2em").style("font-weight","500");
 
       const tilesAll = tEnter.merge(tiles);
 
+      // transition taille/position
       tilesAll.select("rect")
+        .transition().duration(180)
         .attr("x", 0)
-        .attr("width", widthPx)
-        .attr("y", d => y(d.y1))
-        .attr("height", d => Math.max(1, y(d.y0) - y(d.y1)))
+        .attr("width", Math.max(1, cb.wpx))
+        .attr("y", d => d.yPx)
+        .attr("height", d => Math.max(1, d.hPx))
         .attr("fill", d => color(d.avg_ppm2))
         .attr("stroke", d =>
           activeTile && activeTile.city===cb.city && activeTile.type===d.type ? "#111" : "#1f2937"
@@ -372,131 +552,110 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
           activeTile && activeTile.city===cb.city && activeTile.type===d.type ? "drop-shadow(0 1px 4px rgba(0,0,0,.35))" : null
         );
 
-      // Libellé interne (ville + type) – visible si tuile assez grande OU si active
-      tilesAll.select("text.tile-label")
-        .attr("x", widthPx / 2)
-        .attr("y", d => y((d.y0 + d.y1)/2) + 4)
-        .text(d => {
+      // ===== Mise à jour du label + fond coloré =====
+      tilesAll.select("g.tile-label")
+        .attr("transform", d => `translate(${Math.max(1, cb.wpx)/2}, ${d.yPx + d.hPx/2 - 6})`)
+        .each(function(d){
           const isActive = activeTile && activeTile.city===cb.city && activeTile.type===d.type;
-          const h = Math.max(1, y(d.y0) - y(d.y1));
-          const show = isActive || (widthPx > 90 && h > 28);
-          return show ? `${cb.city} • ${d.type}` : "";
+          const show = isActive || (cb.wpx > 90 && d.hPx > 28);
+
+          const g = d3.select(this);
+          g.style("opacity", show ? 1 : 0);
+
+          // Texte
+          const txt = g.select("text");
+          txt.select("tspan.tl1").text(`${cb.city} • ${d.type}`);
+          txt.select("tspan.tl2").text(isActive ? `${moneyPer(d.avg_ppm2)}  •  ${nf1(d.avg_size)} m²` : "");
+
+          // Mesure pour dimensionner le fond
+          const bb = txt.node().getBBox();
+          const padX = 8, padY = 6;
+
+          // Couleur de fond basée sur la tuile, assombrie pour le contraste
+          const base = d3.color(color(d.avg_ppm2));
+          const fillHex = base ? base.darker(0.9).formatHex() : "#0f172a";
+          const strokeHex = base ? base.darker(1.4).formatHex() : "rgba(0,0,0,.35)";
+          const txtFill = textColorFor(fillHex);
+
+          g.select("rect.label-bg")
+            .attr("x", bb.x - padX)
+            .attr("y", bb.y - padY)
+            .attr("width", bb.width + 2*padX)
+            .attr("height", bb.height + 2*padY)
+            .attr("fill", fillHex)
+            .attr("stroke", strokeHex)
+            .attr("stroke-width", 1.2)
+            .attr("filter", isActive ? "drop-shadow(0 2px 6px rgba(0,0,0,.35))" : null);
+
+          txt.style("fill", txtFill);
         });
     });
 
-    // Labels ville en haut (avec pastille pays)
-    const labels = labelsG.selectAll(".mekko-label").data(cityBands, d => d.city);
-    labels.exit().remove();
+    // ---- Bandeaux PAYS en haut (recalculés en pixels) ----
+    const countryBandsPx = [];
+    for (const cb of cityBandsPx) {
+      const last = countryBandsPx[countryBandsPx.length - 1];
+      if (last && last.country === cb.country) {
+        last.x1px = cb.x1px;
+        last.wpx += cb.wpx;
+        last.n += cb.n;
+      } else {
+        countryBandsPx.push({ country: cb.country, x0px: cb.x0px, x1px: cb.x1px, wpx: cb.wpx, n: cb.n });
+      }
+    }
 
-    const labelsEnter = labels.enter().append("g").attr("class","mekko-label");
-    labelsEnter.append("circle").attr("r",4);
-    labelsEnter.append("text");
+    const bands = countryBandsG.selectAll(".country-band").data(countryBandsPx, d => d.country + "-" + d.x0px + "-" + d.x1px);
+    bands.exit().remove();
+    const bandsEnter = bands.enter().append("g").attr("class", "country-band");
+    bandsEnter.append("rect").attr("class","band-bg");
+    bandsEnter.append("text").attr("class","band-label");
 
-    const allLabels = labelsEnter.merge(labels)
-      .attr("transform", d => `translate(${(x(d.x0) + x(d.x1)) / 2},0)`);
+    bandsEnter.merge(bands)
+      .attr("transform", d => `translate(${d.x0px},-34)`);
 
-    allLabels.each(function(d){
-      const gg = d3.select(this);
-      gg.select("circle").attr("cx",0).attr("cy",-26).attr("fill", countryColor(d.country));
-      const w = x(d.x1) - x(d.x0);
-      gg.select("text")
-        .attr("text-anchor","middle").attr("y",-26)
-        .style("font-size","12px").style("font-weight","600")
-        .style("paint-order","stroke").style("stroke","#fff").style("stroke-width","3px").style("stroke-linejoin","round")
-        .text(() => (w > 100 ? `${d.city} • ${d.country}` : (w > 60 ? d.city : "")));
-    });
+    bandsEnter.merge(bands).select("rect.band-bg")
+      .transition().duration(180)
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("rx", 8)
+      .attr("width", d => Math.max(1, d.x1px - d.x0px))
+      .attr("height", 24);
 
-    // Brush (zoom manuel) derrière les tuiles
-    const brush = d3.brushX()
-      .extent([[0,0],[innerW,innerH]])
-      .on("end", ({selection}) => {
-        if (!selection) { zoomDomain = [0,1]; activeTile = null; onZoom?.(null); update(); return; }
-        const [px0, px1] = selection;
-        const s = d3.scaleLinear().domain([0,innerW]).range(zoomDomain);
-        zoomDomain = [s(px0), s(px1)];
-        activeTile = null;
-        onZoom?.(zoomDomain);
-        update();
+    bandsEnter.merge(bands).select("text.band-label")
+      .attr("x", d => (d.x1px - d.x0px) / 2)
+      .attr("y", 16)
+      .attr("text-anchor","middle")
+      .text(d => {
+        const w = Math.max(1, d.x1px - d.x0px);
+        return w > 70 ? d.country : "";
       });
-    brushG.call(brush);
-    brushG.lower();
   }
 
-  // events
-  countrySel.on("change", () => { zoomDomain=[0,1]; activeTile=null; update(); });
-  searchInput.on("input", () => { zoomDomain=[0,1]; activeTile=null; update(); });
-  sortSel.on("change", () => { zoomDomain=[0,1]; activeTile=null; update(); });
-  window.addEventListener("resize", update);
+  function resetFocus() {
+    activeTile = null;
+    updateLegendCursor(null); // <<< ADDED
+    update();
+  }
+  searchInput.on("input", () => { resetFocus(); });
+  window.addEventListener("resize", () => { update(); });
 
+  // init
+  activeTile = null;
   update();
+  updatePager();
 
-  return { resetZoom: () => { zoomDomain = [0,1]; activeTile = null; update(); } };
-}
-
-// ------------------------- DETAIL PANEL (réutilisé par le modal aussi) -------------------------
-function renderDetail(detailEl, dataAll, { city, type=null }) {
-  const where = d => d.city === city && (type ? d.type === type : true);
-  const rows = dataAll.filter(where);
-  if (!rows.length) {
-    detailEl.select(".kpis").html("");
-    detailEl.select(".detail-table").html("<p class='badge'>Aucune donnée pour la sélection</p>");
-    return;
-  }
-  const avgPpm2 = d3.mean(rows, d => d.price_per_m2);
-  const medPpm2 = d3.median(rows, d => d.price_per_m2);
-  const avgPrice = d3.mean(rows, d => d.price);
-  const avgSize = d3.mean(rows, d => d.size_m2);
-  const minPpm2 = d3.min(rows, d => d.price_per_m2);
-  const maxPpm2 = d3.max(rows, d => d.price_per_m2);
-
-  detailEl.select("h3").text(type ? `Détails — ${city} • ${type}` : `Détails — ${city}`);
-
-  const k = detailEl.select(".kpis").html("");
-  const add = (kname, val) => {
-    const card = k.append("div").attr("class","kpi");
-    card.append("div").attr("class","k").text(kname);
-    card.append("div").attr("class","v").text(val);
-  };
-  add("Observations", nf0(rows.length));
-  add("Prix/m² moyen", moneyPer(avgPpm2));
-  add("Prix/m² médian", moneyPer(medPpm2));
-  add("Prix moyen", money(avgPrice));
-  add("Taille moyenne", `${nf1(avgSize)} m²`);
-  add("Min–Max prix/m²", `${moneyPer(minPpm2)} → ${moneyPer(maxPpm2)}`);
-
-  const top = rows.slice().sort((a,b)=>d3.descending(a.price_per_m2,b.price_per_m2)).slice(0,10);
-  const tbl = detailEl.select(".detail-table").html("")
-    .append("table").attr("class","table");
-  const thead = tbl.append("thead").append("tr");
-  ["ID","Ville","Type","Taille (m²)","Prix","Prix/m²","Decision"].forEach(h=>thead.append("th").text(h));
-  const tbody = tbl.append("tbody");
-  top.forEach(r=>{
-    const tr = tbody.append("tr");
-    tr.append("td").text(r.id);
-    tr.append("td").text(r.city);
-    tr.append("td").text(r.type);
-    tr.append("td").text(nf1(r.size_m2));
-    tr.append("td").text(money(r.price));
-    tr.append("td").text(moneyPer(r.price_per_m2));
-    tr.append("td").text(r.decision);
-  });
+  return { resetZoom: () => resetFocus() };
 }
 
 // ------------------------- MAIN -------------------------
 async function dashboard() {
   const data = await loadData();
-  const { leftTop, detail } = mountSplitLayout();
+  const { leftTop } = mountSplitLayout();
 
-  // Mekko (overview + interactions)
   chartMekko(leftTop, data, {
-    onSelect: ({ city, type }) => { renderDetail(detail, data, { city, type }); },
+    onSelect: null,
     onZoom: () => {}
   });
-
-  // Détail initial (ville la plus volumineuse)
-  const byCity = aggByCity(data);
-  const defaultCity = byCity.slice().sort((a,b)=>d3.descending(a.n, b.n))[0]?.city || byCity[0]?.city;
-  renderDetail(detail, data, { city: defaultCity });
 }
 
 // ------------------------- Hook pour index.html -------------------------
