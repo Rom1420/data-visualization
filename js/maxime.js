@@ -159,7 +159,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
 
   // --- Pays disponibles & pagination ---
   const countriesAll = Array.from(new Set(byCity.map(d => d.country))).sort((a,b)=>d3.ascending(a,b));
-  const COUNTRIES_PER_PAGE = 3;
+  const COUNTRIES_PER_PAGE = 2;
   const totalPages = Math.max(1, Math.ceil(countriesAll.length / COUNTRIES_PER_PAGE));
   let page = 0; // state: index de page (0..totalPages-1)
 
@@ -179,7 +179,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
     .text("Reset")
     .on("click", () => {
       activeTile = null;
-      updateLegendCursor(null); // <<< ADDED
+      updateLegendCursor(null); 
       update();
       onZoom?.(null);
     });
@@ -196,7 +196,6 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
   const legendBottom = container.append("div").style("margin","8px 0 0");
   const legendSvg = legendBottom.append("svg").attr("width","100%").attr("height",40);
 
-  // <<< ADDED: état & helpers du curseur de légende
   const legendState = {
     scale: null,   // d3.scaleLinear cmin..cmax -> px
     gLane: null,   // groupe de la piste
@@ -204,7 +203,6 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
     h: 16,
     last: null     // { val, city, fill } pour repositionner au resize
   };
-  // >>> END ADDED
 
   // --- Menu de pagination (bas) ---
   const pager = container.append("div").attr("class","pager").style("display","flex").style("gap","8px").style("align-items","center").style("justify-content","center").style("margin","8px 0 0");
@@ -251,7 +249,6 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
   const cmax = d3.quantile(allP, 0.95) ?? d3.max(allP) ?? 1;
   const color = d3.scaleSequential(d3.interpolateTurbo).domain([cmin, cmax]);
 
-  // <<< UPDATED: Légende + curseur
   function renderLegend() {
     const { width } = legendSvg.node().getBoundingClientRect();
     const w = Math.max(240, width - 10), h = 16;
@@ -296,9 +293,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
   }
   renderLegend();
   window.addEventListener("resize", renderLegend);
-  // >>> END UPDATED
 
-  // <<< ADDED: mise à jour du curseur
   function updateLegendCursor(val, city, fill) {
     const scale = legendState.scale;
     const gCur = legendState.gCursor;
@@ -328,7 +323,6 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
 
     legendState.last = { val, city, fill };
   }
-  // >>> END ADDED
 
   // ------------ State ------------
   let activeTile = null; // { city, type } ou null
@@ -482,7 +476,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
       const tEnter = tiles.enter().append("g").attr("class","mekko-tile")
         .on("mouseenter", (_, d) => {
           activeTile = { city: cb.city, type: d.type };
-          updateLegendCursor(d.avg_ppm2, cb.city, color(d.avg_ppm2)); // <<< ADDED
+          updateLegendCursor(d.avg_ppm2, cb.city, color(d.avg_ppm2)); 
           update();
         })
         .on("mousemove", (event, d) => {
@@ -502,7 +496,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
         .on("mouseleave", () => {
           tooltip.style("opacity",0);
           activeTile = null;
-          updateLegendCursor(null); // <<< ADDED
+          updateLegendCursor(null); 
           update();
         })
         .on("click", (_, d) => {
@@ -633,7 +627,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
 
   function resetFocus() {
     activeTile = null;
-    updateLegendCursor(null); // <<< ADDED
+    updateLegendCursor(null);
     update();
   }
   searchInput.on("input", () => { resetFocus(); });
