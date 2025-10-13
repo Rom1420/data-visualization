@@ -12,10 +12,8 @@
 
 body{
     margin: 0;
-    background-image: url("../assets/bg.jpg");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    background: #4B50BF;
+    background: linear-gradient(90deg, rgba(75, 80, 191, 1) 0%, rgba(2, 15, 89, 1) 50%, rgba(75, 80, 191, 1) 100%);
     color: var(--white);
     font-family: 'Roboto', sans-serif;
     display: flex;
@@ -23,9 +21,11 @@ body{
     justify-content: flex-start;
     flex-direction: column;
     gap: 1rem;
+    overflow-x: hidden;
     
     width: 100vw;
-    height: 100vh;
+    height: 100%;
+    margin-bottom: 100px;
 }
 
 #viz-container{
@@ -34,7 +34,7 @@ body{
     gap: 2rem;
 }
 
-.viz-content{
+.viz-content, #year-details{
     background: rgba(255, 255, 255, 0.2);
     border-radius: 16px;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
@@ -57,11 +57,11 @@ button{
 }
 
 button:hover{
-    background: rgba(255, 255, 255, 0.5);
+    background: #ff8f17a7;
 }
 
 button.selected{
-    background: rgba(255, 255, 255, 0.5)
+    background: var(--orange);
 }
 
 h1{
@@ -75,6 +75,7 @@ h1{
 .controls-container{
     display: flex;
     gap: 2rem;
+    justify-content: space-around;
 }
 
 label{
@@ -108,6 +109,18 @@ select{
   padding-right: 25px; /* espace pour l'icône */
 }
 
+select option {
+    all: unset;
+    background-color: var(--dark-blue-2); /* couleur de fond des options */
+    color: var(--white); /* couleur du texte */
+}
+
+select option:checked,
+select option:hover {
+    background-color: var(--light-blue);
+    color: var(--white);
+}
+
 .select-wrapper i {
   position: absolute;
   right: 10px;
@@ -129,18 +142,61 @@ input[type="checkbox"]{
     cursor: pointer;
     aspect-ratio: 1;
     height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: all .3s ease-in-out;
 }
 
 input[type="checkbox"]:hover {
-    background: rgba(255, 255, 255, 0.35);
+    background: #ff8f17a7;
     box-shadow: 0 6px 35px rgba(0, 0, 0, 0.15);
     border-color: rgba(255, 255, 255, 0.5);
 }
 
 
 input[type="checkbox"]:checked {
-    background: var(--dark-blue-2);
+    background: var(--orange);
     box-shadow: 0 3px 15px rgba(0, 0, 0, 0.2);
     border-color: var(--white);
     transform: scale(0.95);
+}
+
+input[type="checkbox"]::after {
+    content: '✓';
+    color: var(--white);
+    font-size: 1.2rem;
+    display: none;
+    opacity: 0;
+    transition: opacity .3s ease-in-out;
+}
+
+input[type="checkbox"]:checked::after {
+    content: '✓';
+    color: var(--white);
+    font-size: 1.2rem;
+    display: block;
+    opacity: 1;
+}
+
+.tootltip {
+    transition: opacity .3s ease-in-out , transform .3s ease-in-out; 
+    opacity: 0; 
+    cursor: pointer;
+    transform: scale(0);
+}
+
+.tootltip:hover {
+    opacity: 1; 
+    transform: scale(1);
+}
+
+.dot{
+    transition: filter .3s ease-in-out;
+    cursor: pointer;
+}
+
+.dot:hover{
+    filter: brightness(200%);
 }
