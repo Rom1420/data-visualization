@@ -220,3 +220,7 @@ input[type="checkbox"]:checked::after {
 .bar-romain:hover{
     filter: brightness(200%);
 }
+
+.dot{
+    transition: all 500ms ease-in-out;
+}
