@@ -223,7 +223,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       .attr("y", 30)
       .attr("text-anchor", "middle")
       .style("font-weight", "bold")
-      .text(`Notation des villes de tous les pays`);
+      .text(`Notation des villes`);
     svg.append("text")
       .attr("x", width / 2)
       .attr("y", height - 20)
@@ -288,7 +288,13 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       })
       .on("click", function(event, d) {
         const cityName = d.city;
-        const cityEntries = filtered.filter(item => item.city === cityName);
+        const cityEntries = data.filter(item => {
+          if (item.city !== cityName) return false;
+          if (currentFilters.minSatisfaction > 0 && +item.satisfaction_score <= currentFilters.minSatisfaction) return false;
+          if (currentFilters.minQuality > 0 && +item.neighbourhood_rating <= currentFilters.minQuality) return false;
+          if (currentFilters.minAccessibility > 0 && +item.connectivity_score <= currentFilters.minAccessibility) return false;
+          return true;
+        });
 
         // Supprimer l'ancien graphique si existe
         d3.select("#city-details").remove();
