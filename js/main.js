@@ -3,7 +3,12 @@ function loadViz(name) {
 
     const script = document.createElement("script");
     script.src = `js/${name}.js`;
-    script.onload = () => console.log(`${name}.js chargé !`);
+    script.onload = () => {
+        console.log(`${name}.js chargé !`);
+        if (name === "antoine" && window.renderAntoine) {
+            window.renderAntoine(document.getElementById("viz-container"));
+        }
+    }
     document.body.appendChild(script);
 
     const buttons = document.querySelectorAll('nav button');
