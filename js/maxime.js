@@ -194,7 +194,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
 
   // Légende dégradé
   const legendBottom = container.append("div").style("margin","8px 0 0");
-  const legendSvg = legendBottom.append("svg").attr("width","100%").attr("height",40);
+  const legendSvg = legendBottom.append("svg").attr("width","100%").attr("height",100);
 
   const legendState = {
     scale: null,   // d3.scaleLinear cmin..cmax -> px
@@ -262,7 +262,7 @@ function chartMekko(container, dataAll, { onSelect, onZoom } = {}) {
       const t=i/10;
       lg.append("stop").attr("offset",(t*100)+"%").attr("stop-color", color(cmin + t*(cmax-cmin)));
     }
-    const gL = legendSvg.append("g").attr("transform","translate(0,8)");
+    const gL = legendSvg.append("g").attr("transform","translate(0,35)");
     legendState.gLane = gL;
 
     gL.append("rect").attr("x",5).attr("y",0).attr("width",w).attr("height",h).attr("rx",4).attr("fill",`url(#${gradId})`);
