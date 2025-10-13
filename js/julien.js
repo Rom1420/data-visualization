@@ -50,20 +50,52 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       .style("background", "#fafafa")
       .style("display", "inline-block");
 
-    // Valeurs courantes ou par défaut pour les filtres
-    let minSat = (document.getElementById("min-satisfaction") && document.getElementById("min-satisfaction").value) || 0;
-    let minQual = (document.getElementById("min-quality") && document.getElementById("min-quality").value) || 0;
-    let minAcc = (document.getElementById("min-accessibility") && document.getElementById("min-accessibility").value) || 0;
-
-    filtersPanel.html(`
-      <label for="min-satisfaction">Satisfaction min. :</label>
-      <input type="number" id="min-satisfaction" value="${minSat}" min="0" max="10" step="0.1" style="width:60px;margin-right:10px;">
-      <label for="min-quality">Qualité min. :</label>
-      <input type="number" id="min-quality" value="${minQual}" min="0" max="10" step="0.1" style="width:60px;margin-right:10px;">
-      <label for="min-accessibility">Accessibilité min. :</label>
-      <input type="number" id="min-accessibility" value="${minAcc}" min="0" max="10" step="0.1" style="width:60px;margin-right:10px;">
-      <button id="apply-filters-btn">Appliquer filtres</button>
-    `);
+    // Créer les éléments de filtre sans écraser les valeurs
+    // Utiliser currentFilters pour initialiser les valeurs (pas de .html qui écrase)
+    filtersPanel.append("label")
+      .attr("for", "min-satisfaction")
+      .text("Satisfaction min. :");
+    filtersPanel.append("input")
+      .attr("type", "number")
+      .attr("id", "min-satisfaction")
+      .attr("min", 0)
+      .attr("max", 10)
+      .attr("step", 0.1)
+      .style("width", "60px")
+      .style("margin-right", "10px")
+      .property("value", currentFilters.minSatisfaction);
+    filtersPanel.append("label")
+      .attr("for", "min-quality")
+      .text("Qualité min. :");
+    filtersPanel.append("input")
+      .attr("type", "number")
+      .attr("id", "min-quality")
+      .attr("min", 0)
+      .attr("max", 10)
+      .attr("step", 0.1)
+      .style("width", "60px")
+      .style("margin-right", "10px")
+      .property("value", currentFilters.minQuality);
+    filtersPanel.append("label")
+      .attr("for", "min-accessibility")
+      .text("Accessibilité min. :");
+    filtersPanel.append("input")
+      .attr("type", "number")
+      .attr("id", "min-accessibility")
+      .attr("min", 0)
+      .attr("max", 10)
+      .attr("step", 0.1)
+      .style("width", "60px")
+      .style("margin-right", "10px")
+      .property("value", currentFilters.minAccessibility);
+    filtersPanel.append("button")
+      .attr("id", "apply-filters-btn")
+      .text("Appliquer filtres");
+    // Ajouter le bouton Réinitialiser filtres à côté
+    filtersPanel.append("button")
+      .attr("id", "reset-filters-btn")
+      .style("margin-left", "8px")
+      .text("Réinitialiser filtres");
 
     // Nouvelle gestion du bouton "Appliquer filtres"
     filtersPanel.select("#apply-filters-btn").on("click", function() {
@@ -113,6 +145,20 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
 
       // Rafraîchir le scatter plot avec ces villes filtrées
       renderScatter(selectedCountry, filteredCitiesData);
+    });
+
+    // Gestion du bouton "Réinitialiser filtres"
+    filtersPanel.select("#reset-filters-btn").on("click", function() {
+      // Remettre currentFilters à zéro
+      currentFilters.minSatisfaction = 0;
+      currentFilters.minQuality = 0;
+      currentFilters.minAccessibility = 0;
+      // Mettre à jour les inputs
+      document.getElementById("min-satisfaction").value = 0;
+      document.getElementById("min-quality").value = 0;
+      document.getElementById("min-accessibility").value = 0;
+      // Réafficher le scatter plot sans filtrage
+      renderScatter(selectedCountry);
     });
 
     // filtered = filteredData si fourni, sinon filtrage par pays ou tout
