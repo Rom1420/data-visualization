@@ -97,12 +97,18 @@ select{
     cursor: pointer;
 }
 
-.select-wrapper {
+.select-wrapper{
   position: relative;
   display: inline-block;
+
+}
+
+.select-wrapper select:hover{
+    background-color: #ff8f17a7;
 }
 
 .select-wrapper select {
+  transition: background-color .3s ease-in-out;
   appearance: none; 
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -141,7 +147,8 @@ input[type="checkbox"]{
     border: 1px solid rgba(255, 255, 255, 0.3);
     cursor: pointer;
     aspect-ratio: 1;
-    height: 100%;
+    height: 40px;
+    width: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -198,5 +205,18 @@ input[type="checkbox"]:checked::after {
 }
 
 .dot:hover{
+    filter: brightness(200%);
+}
+
+.reset-button{
+    height: 40px;
+    box-sizing: border-box;
+}
+
+.bar-romain:hover{
+    transition: 0.3s filter ease-in-out;
+}
+
+.bar-romain:hover{
     filter: brightness(200%);
 }

@@ -52,6 +52,8 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     .style("pointer-events", "none")
     .style("box-shadow", "0 4px 30px rgba(0, 0, 0, 0.1)");
 
+let selectedYear = null;
+
   // Fonction pour filtrer et mettre à jour
   function updateChart() {
     let filtered = data;
@@ -128,60 +130,89 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       })
       .on("mouseout", () => tooltip.style("display", "none"))
       .on("click", (event, d) => {
-        zoomOnYear(d.year);
+        selectedYear = d.year;
+        zoomOnYear(selectedYear);
       });
+
+      if(selectedYear !== null){
+        zoomOnYear(selectedYear);
+      }
   }
 
   // Initial
   updateChart();
 
-  // Ajouter les controls
-  const controls = d3.select("#viz-container")
-    .append("div")
-    .attr("class", "controls-container");
+  // Controls container
+const controls = d3.select("#viz-container")
+  .append("div")
+  .attr("class", "controls-container");
 
-  // Dropdown pays avec icône
-  const countryWrapper = controls.append("div").attr("class", "select-wrapper");
-  countryWrapper.append("select")
-    .on("change", function() {
-      selectedCountry = this.value;
-      updateChart();
-      countPropertiesByPrice(selectedCountry, data);
-    })
-    .selectAll("option")
-    .data(["All", ...Array.from(new Set(data.map(d => d.country)))])
-    .enter()
-    .append("option")
-    .text(d => d)
-    .attr("value", d => d);
+// Dropdown pays
+const countryWrapper = controls.append("div").attr("class", "select-wrapper");
+countryWrapper.append("select")
+  .on("change", function() {
+    selectedCountry = this.value;
+    updateChart();
+    countPropertiesByPrice(selectedCountry, data);
+  })
+  .selectAll("option")
+  .data(["All", ...Array.from(new Set(data.map(d => d.country)))])
+  .enter()
+  .append("option")
+  .text(d => d)
+  .attr("value", d => d);
+countryWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
-  countryWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
+// Dropdown type de bien
+const typeWrapper = controls.append("div").attr("class", "select-wrapper");
+typeWrapper.append("select")
+  .on("change", function() {
+    selectedType = this.value;
+    updateChart();
+  })
+  .selectAll("option")
+  .data(["All", ...Array.from(new Set(data.map(d => d.property_type)))])
+  .enter()
+  .append("option")
+  .text(d => d)
+  .attr("value", d => d);
+typeWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
-  // Dropdown type de bien avec icône
-  const typeWrapper = controls.append("div").attr("class", "select-wrapper");
-  typeWrapper.append("select")
-    .on("change", function() {
-      selectedType = this.value;
-      updateChart();
-    })
-    .selectAll("option")
-    .data(["All", ...Array.from(new Set(data.map(d => d.property_type)))])
-    .enter()
-    .append("option")
-    .text(d => d)
-    .attr("value", d => d);
+// Ligne avec toggle + bouton reset
+const lineControls = controls.append("div")
+  .style("display", "flex")
+  .style("align-items", "center");
 
-  typeWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
+const resetControls = controls.append("div")
+  .style("display", "flex")
+  .style("align-items", "center");
 
-  // Toggle normalisation
-  controls.append("label")
-    .text(" Normaliser par surface")
-    .append("input")
-    .attr("type", "checkbox")
-    .on("change", function() {
-      normalizeBySize = this.checked;
-      updateChart();
-    });
+// Toggle normalisation
+lineControls.append("label") 
+  .text(" Normaliser par surface") 
+  .append("input") 
+  .attr("type", "checkbox") 
+  .on("change", function() { normalizeBySize = this.checked; updateChart(); });
+
+// Bouton reset
+resetControls.append("button")
+  .text("Reset")
+  .attr('class', 'reset-button')
+  .style("padding", "5px 10px")
+  .style("cursor", "pointer")
+  .on("click", () => {
+    selectedCountry = "All";
+    selectedType = "All";
+    normalizeBySize = false;
+
+    // reset les selects
+    countryWrapper.select("select").property("value", "All");
+    typeWrapper.select("select").property("value", "All");
+    lineControls.select("input").property("checked", false);
+
+    updateChart();
+  });
+
 
   // Fonction pour compter le nombre de biens par intervalles de prix pour un pays donné
 function countPropertiesByPrice(country, data) {
@@ -207,8 +238,10 @@ function countPropertiesByPrice(country, data) {
 }
 
 function zoomOnYear(year) {
-  const filteredYear = data.filter(d => d.constructed_year === year);
-
+  let filteredYear = data;
+  if (selectedCountry !== "All") filteredYear = filteredYear.filter(d => d.country === selectedCountry);
+  if (selectedType !== "All") filteredYear = filteredYear.filter(d => d.property_type === selectedType);
+  filteredYear = filteredYear.filter(d => d.constructed_year === year);
   // Nettoyer ancienne viz s’il y en a une
   d3.select("#year-details").remove();
 
@@ -237,6 +270,8 @@ function zoomOnYear(year) {
   .data(bins)
   .enter()
   .append("rect")
+  .style("cursor","pointer")
+  .attr("class", "bar-romain")
   .attr("x", d => xHist(d.x0))
   .attr("y", d => yHist(d.length))
   .attr("width", d => xHist(d.x1) - xHist(d.x0) - 1)
