@@ -1,0 +1,122 @@
+/* Style global */
+body {
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background-color: #fafafa;
+  color: #333;
+  margin: 20px;
+  text-align: center;
+}
+
+/* Conteneur principal */
+#viz-container {
+  display: inline-block;
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Bouton "Tous les pays" */
+button {
+  background-color: #0078d7;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+button:hover {
+  background-color: #005fa3;
+  transform: scale(1.05);
+}
+
+button:active {
+  background-color: #004e85;
+}
+
+/* Tooltip */
+#tooltip {
+  position: absolute;
+  background: white;
+  border: 1px solid #333;
+  padding: 8px;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+  line-height: 1.4em;
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+/* Détails d'une ville (histogramme + infos) */
+#city-details {
+  margin-top: 25px;
+  padding: 15px;
+  background: #f9f9f9;
+  border: 1px solid #999;
+  border-radius: 6px;
+  display: inline-block;
+  text-align: left;
+}
+
+/* Panneau d'infos à gauche de l’histogramme */
+#city-info {
+  display: inline-block;
+  vertical-align: top;
+  width: 200px;
+  margin-right: 20px;
+}
+
+#city-info h4 {
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 5px;
+}
+
+#city-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* SVG principal */
+svg {
+  font-family: inherit;
+}
+
+/* Légende à droite */
+svg g text {
+  font-size: 13px;
+}
+
+/* Amélioration des axes */
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #888;
+  shape-rendering: crispEdges;
+}
+
+/* Texte des labels */
+text {
+  font-family: inherit;
+  color: #333;
+}
+
+/* Conteneur du graphique d'histogramme */
+#city-details svg {
+  background: #fff;
+  border-radius: 6px;
+}
+
+/* Barres de l’histogramme */
+rect {
+  transition: fill 0.3s, height 0.3s;
+}
+
+rect:hover {
+  opacity: 0.8;
+}
