@@ -40,16 +40,15 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   const compareModeBtn = document.createElement("button");
   compareModeBtn.innerText = "Mode comparaison des villes";
   compareModeBtn.style.margin = "10px";
-  compareModeBtn.style.background = "#eee";
   compareModeBtn.style.border = "1px solid #888";
-  compareModeBtn.style.color = "#000000ff";
+  compareModeBtn.style.color = "#ffffffff";
   compareModeBtn.style.cursor = "pointer";
   compareModeBtn.onclick = () => {
     comparisonMode = !comparisonMode;
     if (comparisonMode) {
       compareModeBtn.style.background = "#489ffbff";
     } else {
-      compareModeBtn.style.background = "#eee";
+      compareModeBtn.style.background = "";
       selectedCities = [];
       updateComparisonPanel([]);
       // On doit aussi rafraîchir les couleurs des points
@@ -74,11 +73,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     const filtersPanel = d3.select("body")
       .insert("div", "#viz-container")
       .attr("id", "filters-panel")
-      .style("margin-bottom", "12px")
-      .style("padding", "10px")
-      .style("border", "1px solid #ccc")
-      .style("background", "#fafafa")
-      .style("display", "inline-block");
 
     // Créer les éléments de filtre sans écraser les valeurs
     // Utiliser currentFilters pour initialiser les valeurs (pas de .html qui écrase)
@@ -294,6 +288,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
           .style("position", "absolute")
           .style("background", "#fff")
           .style("border", "1px solid #333")
+          .style("color", "#000")
           .style("padding", "5px")
           .style("pointer-events", "none")
           .style("opacity", 0.9)
@@ -354,13 +349,11 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .attr("id", "city-details")
             .style("margin-top", "20px")
             .style("padding", "10px")
-            .style("border", "1px solid #333")
-            .style("background", "#f9f9f9");
 
           // Ajouter un bouton pour revenir au scatter plot
           details.append("button")
             .attr("id", "back-to-scatter")
-            .text("Revenir a la selection des villes")
+            .text("Revenir à la selection des villes")
             .style("margin-bottom", "12px")
             .style("margin-right", "15px")
             .on("click", () => {
@@ -372,8 +365,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
           // Ajouter un titre avec la ville sélectionnée
           details.append("h4")
             .text(`Quartiers de ${cityName}`)
-            .style("margin-top", "0")
-            .style("margin-bottom", "10px");
+            .style("text-align", "center");
 
           const infoPanel = details.append("div")
             .attr("id", "city-info")
@@ -466,8 +458,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
                 rightPanel.style.verticalAlign = "top";
                 rightPanel.style.width = "200px";
                 rightPanel.style.marginLeft = "20px";
-                rightPanel.style.background = "#f0f0f0";
-                rightPanel.style.border = "1px solid #ccc";
                 rightPanel.style.borderRadius = "6px";
                 rightPanel.style.padding = "8px";
                 rightPanel.style.textAlign = "left";
@@ -609,11 +599,8 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
       .style("top", "80px")
       .style("right", "20px")
       .style("width", "320px")
-      .style("background", "#f1f8ff")
-      .style("border", "2px solid #0074d9")
       .style("border-radius", "10px")
       .style("padding", "18px")
-      .style("box-shadow", "0 2px 12px rgba(0,0,0,0.10)")
       .style("z-index", 1000);
     panel.append("h3")
       .text("Comparaison des villes")
