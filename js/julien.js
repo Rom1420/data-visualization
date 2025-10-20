@@ -428,7 +428,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .padding(0.1);
 
           const y = d3.scaleLinear()
-            .domain([0, d3.max(cityEntries, d => +d.satisfaction_score)])
+            .domain([0, d3.max(cityEntries, d => (+d.satisfaction_score + +d.neighbourhood_rating + +d.connectivity_score) / 3)])
             .range([histHeight - margin.bottom, margin.top]);
 
           // Utiliser la même échelle de couleur que celle du scatter plot pour les pays
@@ -440,9 +440,9 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .data(cityEntries)
             .join("rect")
             .attr("x", (_, i) => x(i + 1))
-            .attr("y", d => y(+d.satisfaction_score))
+            .attr("y", d => y((+d.satisfaction_score + +d.neighbourhood_rating + +d.connectivity_score) / 3))
             .attr("width", x.bandwidth())
-            .attr("height", d => histHeight - margin.bottom - y(+d.satisfaction_score))
+            .attr("height", d => histHeight - margin.bottom - y((+d.satisfaction_score + +d.neighbourhood_rating + +d.connectivity_score) / 3))
             .attr("fill", d => colorScale(d.country))
             // Suppression du hover/tooltip sur les barres, ajout du clic pour afficher le panel quartier à droite du bar chart
             .on("click", function(event, d) {
@@ -694,12 +694,12 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
           {label: "Satisfaction", value: avgSatisfaction},
           {label: "Accessibilité", value: avgAccessibility}
         ];
-        
+
         const pieWidth = 150, pieHeight = 150, radius = Math.min(pieWidth, pieHeight) / 2;
         const color = d3.scaleOrdinal()
           .domain(pieData.map(d => d.label))
           .range(["#4daf4a", "#377eb8", "#ff7f00"]);
-        
+
         // Créer un conteneur flottant pour le pie chart
         const pieContainer = d3.select("body")
           .append("div")
