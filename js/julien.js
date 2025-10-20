@@ -444,17 +444,12 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .attr("width", x.bandwidth())
             .attr("height", d => histHeight - margin.bottom - y(+d.satisfaction_score))
             .attr("fill", d => colorScale(d.country))
-            .attr("stroke", "#333")
             // Suppression du hover/tooltip sur les barres, ajout du clic pour afficher le panel quartier à droite du bar chart
             .on("click", function(event, d) {
               // Supprimer l'ancien panneau s'il existe
               d3.select("#quartier-info-panel").remove();
               // Trouver ou créer le panneau à droite du bar chart
-              // Chercher le parent .city-details (div) et le svg du bar chart
               const detailsDiv = document.getElementById("city-details");
-              // Si le panneau existe déjà, on le supprime (déjà fait ci-dessus)
-              // Créer le panneau à droite du svg
-              // On cherche s'il y a déjà un div .bar-chart-right-panel, sinon on le crée
               let rightPanel = detailsDiv.querySelector("#quartier-info-panel");
               if (!rightPanel) {
                 rightPanel = document.createElement("div");
@@ -469,7 +464,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
                 rightPanel.style.padding = "8px";
                 rightPanel.style.textAlign = "left";
                 // Insérer juste après le svg du bar chart
-                // Trouver le svg du bar chart (dans detailsDiv)
                 const barSvg = detailsDiv.querySelector("svg");
                 if (barSvg && barSvg.nextSibling) {
                   detailsDiv.insertBefore(rightPanel, barSvg.nextSibling);
@@ -479,13 +473,51 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
                   detailsDiv.appendChild(rightPanel);
                 }
               }
-              // Mettre à jour l'intérieur du panneau
-              rightPanel.innerHTML = `
-                <h4 style="margin-bottom:5px;">Quartier sélectionné</h4>
-                <p><strong>Qualité :</strong> ${(+d.neighbourhood_rating).toFixed(2)}</p>
-                <p><strong>Satisfaction :</strong> ${(+d.satisfaction_score).toFixed(2)}</p>
-                <p><strong>Accessibilité :</strong> ${(+d.connectivity_score).toFixed(2)}</p>
-              `;
+              // Mettre à jour l'intérieur du panneau avec un pie chart D3
+              rightPanel.innerHTML = `<h4 style="margin-bottom:5px;">Quartier sélectionné</h4>`;
+              
+              const pieData = [
+                {label: "Qualité", value: +d.neighbourhood_rating},
+                {label: "Satisfaction", value: +d.satisfaction_score},
+                {label: "Accessibilité", value: +d.connectivity_score}
+              ];
+              
+              const pieWidth = 180, pieHeight = 180, radius = Math.min(pieWidth, pieHeight) / 2;
+              const svgPie = d3.select(rightPanel)
+                .append("svg")
+                .attr("width", pieWidth)
+                .attr("height", pieHeight)
+                .append("g")
+                .attr("transform", `translate(${pieWidth / 2},${pieHeight / 2})`);
+              
+              const color = d3.scaleOrdinal()
+                .domain(pieData.map(d => d.label))
+                .range(["#4daf4a", "#377eb8", "#ff7f00"]);
+              
+              const pie = d3.pie().value(d => d.value);
+              const arc = d3.arc().innerRadius(0).outerRadius(radius - 10);
+              
+              svgPie.selectAll("path")
+                .data(pie(pieData))
+                .enter()
+                .append("path")
+                .attr("d", arc)
+                .attr("fill", d => color(d.data.label))
+                .attr("stroke", "#fff")
+                .style("stroke-width", "2px");
+              
+              const legend = d3.select(rightPanel)
+                .append("div")
+                .style("margin-top", "10px");
+              pieData.forEach(item => {
+                const entry = legend.append("div").style("display", "flex").style("align-items", "center");
+                entry.append("div")
+                  .style("width", "12px")
+                  .style("height", "12px")
+                  .style("background", color(item.label))
+                  .style("margin-right", "6px");
+                entry.append("span").text(`${item.label}: ${item.value.toFixed(2)}`);
+              });
             });
 
           // Axes
@@ -648,23 +680,87 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     legend.selectAll("g")
       .on("click", function(event, d) {
         const clickedCountry = d3.select(this).select("text").text();
+        d3.select("#country-piechart").remove();
         renderScatter(clickedCountry);
       })
       .on("mouseover", function(event, d) {
         const hoveredCountry = d3.select(this).select("text").text();
-        svg.selectAll("circle")
-          .transition()
-          .duration(200)
-          .attr("opacity", p => p.country === hoveredCountry ? 1 : 0.1)
-          .attr("r", p => p.country === hoveredCountry ? rScale(p.satisfaction_score) * 1.4 : rScale(p.satisfaction_score) * 0.8);
+        const countryData = data.filter(c => c.country === hoveredCountry);
+        const avgQuality = d3.mean(countryData, d => +d.neighbourhood_rating);
+        const avgSatisfaction = d3.mean(countryData, d => +d.satisfaction_score);
+        const avgAccessibility = d3.mean(countryData, d => +d.connectivity_score);
+        const pieData = [
+          {label: "Qualité", value: avgQuality},
+          {label: "Satisfaction", value: avgSatisfaction},
+          {label: "Accessibilité", value: avgAccessibility}
+        ];
+        
+        const pieWidth = 150, pieHeight = 150, radius = Math.min(pieWidth, pieHeight) / 2;
+        const color = d3.scaleOrdinal()
+          .domain(pieData.map(d => d.label))
+          .range(["#4daf4a", "#377eb8", "#ff7f00"]);
+        
+        // Créer un conteneur flottant pour le pie chart
+        const pieContainer = d3.select("body")
+          .append("div")
+          .attr("id", "country-piechart")
+          .style("position", "absolute")
+          .style("left", (event.pageX + 20) + "px")
+          .style("top", (event.pageY - 50) + "px")
+          .style("background", "#fff")
+          .style("border", "1px solid #ccc")
+          .style("border-radius", "8px")
+          .style("padding", "8px")
+          .style("pointer-events", "none")
+          .style("box-shadow", "0 2px 8px rgba(0,0,0,0.15)");
+        
+        pieContainer.append("h5")
+          .text(hoveredCountry)
+          .style("margin", "0 0 6px 0")
+          .style("text-align", "center");
+        
+        const svgPie = pieContainer.append("svg")
+          .attr("width", pieWidth)
+          .attr("height", pieHeight)
+          .append("g")
+          .attr("transform", `translate(${pieWidth / 2},${pieHeight / 2})`);
+        
+        const pie = d3.pie().value(d => d.value);
+        const arc = d3.arc().innerRadius(0).outerRadius(radius - 10);
+        
+        svgPie.selectAll("path")
+          .data(pie(pieData))
+          .enter()
+          .append("path")
+          .attr("d", arc)
+          .attr("fill", d => color(d.data.label))
+          .attr("stroke", "#fff")
+          .style("stroke-width", "2px");
+        
+        const legendDiv = pieContainer.append("div").style("margin-top", "6px");
+        pieData.forEach(item => {
+          const entry = legendDiv.append("div").style("display", "flex").style("align-items", "center");
+          entry.append("div")
+            .style("width", "10px")
+            .style("height", "10px")
+            .style("background", color(item.label))
+            .style("margin-right", "5px");
+          entry.append("span").text(`${item.label}: ${item.value.toFixed(2)}`);
+        });
+      })
+      .on("mousemove", function(event) {
+        d3.select("#country-piechart")
+          .style("left", (event.pageX + 20) + "px")
+          .style("top", (event.pageY - 50) + "px");
       })
       .on("mouseout", function() {
-        svg.selectAll("circle")
-          .transition()
-          .duration(200)
-          .attr("opacity", 0.7)
-          .attr("r", d => rScale(d.satisfaction_score));
+        d3.select("#country-piechart").remove();
       });
+
+    // Supprimer le pie chart pays si la souris quitte la légende au global
+    legend.on("mouseleave", () => {
+      d3.select("#country-piechart").remove();
+    });
   }
 
   // Initialisation automatique sans paramètre
