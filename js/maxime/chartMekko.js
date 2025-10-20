@@ -37,7 +37,7 @@
     // Boutons
     const btns = controls.append("div").style("display","inline-flex").style("gap","8px").style("margin-left","12px");
     const applyBtn = btns.append("button").attr("type","button").text("Appliquer les filtres");
-    const resetBtn = btns.append("button").attr("type","button").text("Reset");
+    //const resetBtn = btns.append("button").attr("type","button").text("Reset");
 
     applyBtn.on("click", () => {
       filterState.qCity = pending.qCity;
@@ -49,11 +49,11 @@
     });
 
     // --- Reset + anti-hover flash
-    resetBtn.on("click", (e) => {
-      e.preventDefault();
-      resetFocus(true);
-      onZoom?.(null);
-    });
+    //resetBtn.on("click", (e) => {
+    //  e.preventDefault();
+    //  resetFocus(true);
+    //  onZoom?.(null);
+    //});
 
     // Layout
     const margin = { top: 64, right: 12, bottom: 56, left: 12 };
