@@ -334,7 +334,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             cityData.find(c => c.city === cityName)
           ).filter(Boolean));
         } else {
-          // Mode normal : comportement habituel (afficher détails ville)
+          // Mode normal : afficher le bar chart à la place du scatter plot
           const cityName = d.city;
           const cityEntries = data.filter(item => {
             if (item.city !== cityName) return false;
@@ -344,10 +344,11 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             return true;
           });
 
-          // Supprimer l'ancien graphique si existe
+          // Supprimer l'ancien scatter plot et détails éventuels
+          d3.select("#viz-container").selectAll("*").remove();
           d3.select("#city-details").remove();
 
-          // Créer un conteneur pour l'histogramme
+          // Créer un conteneur pour l'histogramme (remplace le scatter)
           const details = d3.select("#viz-container")
             .append("div")
             .attr("id", "city-details")
@@ -355,6 +356,18 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .style("padding", "10px")
             .style("border", "1px solid #333")
             .style("background", "#f9f9f9");
+
+          // Ajouter un bouton pour revenir au scatter plot
+          details.append("button")
+            .attr("id", "back-to-scatter")
+            .text("Revenir a la selection des villes")
+            .style("margin-bottom", "12px")
+            .style("margin-right", "15px")
+            .on("click", () => {
+              // Supprimer le bar chart et réafficher le scatter plot
+              d3.select("#city-details").remove();
+              renderScatter();
+            });
 
           // Ajouter un titre avec la ville sélectionnée
           details.append("h4")
@@ -431,10 +444,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .domain([0, d3.max(cityEntries, d => (+d.satisfaction_score + +d.neighbourhood_rating + +d.connectivity_score) / 3)])
             .range([histHeight - margin.bottom, margin.top]);
 
-          // Utiliser la même échelle de couleur que celle du scatter plot pour les pays
-          // colorScale est déjà défini dans renderScatter (pour les pays)
-          // On utilise la couleur du pays du quartier : d.country
-
           // Barres
           svg.selectAll("rect")
             .data(cityEntries)
@@ -444,7 +453,6 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
             .attr("width", x.bandwidth())
             .attr("height", d => histHeight - margin.bottom - y((+d.satisfaction_score + +d.neighbourhood_rating + +d.connectivity_score) / 3))
             .attr("fill", d => colorScale(d.country))
-            // Suppression du hover/tooltip sur les barres, ajout du clic pour afficher le panel quartier à droite du bar chart
             .on("click", function(event, d) {
               // Supprimer l'ancien panneau s'il existe
               d3.select("#quartier-info-panel").remove();
