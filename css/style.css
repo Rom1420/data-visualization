@@ -1,14 +1,11 @@
-
 /* ====== Dashboard GHPD (scopé) ====== */
 .ghpd {}
 
 /* --------- Layout --------- */
 .ghpd .split{
-  /* Pleine largeur: on ne crée plus de colonnes */
   display:block;
 }
 .ghpd .col-left{
-  /* plus utilisé, on garde neutre */
   display:block;
 }
 
@@ -24,45 +21,14 @@
 .ghpd .panel h2{ margin:0 0 6px; font-size:16px; }
 .ghpd .detail h3{ margin:0 0 8px; font-size:15px; }
 
-/* --------- Contrôles --------- */
+/* --------- Contrôles (mise en page uniquement ; styles visuels = CSS général) --------- */
 .ghpd .controls{
-  display:block;               /* plus de grid, simple flux */
+  display:block;
   gap:8px;
   align-items:end;
   margin-bottom:8px;
 }
-.ghpd .controls label{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  font-size:12px;
-  color: var(--muted, #374151);
-  margin-bottom:6px;           /* petite marge entre les champs quand en bloc */
-}
-.ghpd select,
-.ghpd input[type="search"]{
-  padding:8px 10px;
-  border-radius:10px;
-  background: var(--input, #fff);
-  color: var(--text, #111827);
-  border:1px solid var(--border, #d1d5db);
-  outline:none;
-  width: min(420px, 100%);     /* large mais fluide */
-}
-.ghpd select:focus,
-.ghpd input[type="search"]:focus{
-  box-shadow:0 0 0 3px #2563eb22;
-  border-color:#2563eb;
-}
-.ghpd .controls button{
-  padding:8px 12px;
-  border-radius:10px;
-  background: var(--input, #f3f4f6);
-  color: var(--text, #111827);
-  border:1px solid var(--border, #d1d5db);
-  cursor:pointer;
-}
-.ghpd .controls button:hover{ filter:brightness(.97); }
+/* On laisse les <label>, <select>, <input>, <button> au CSS général */
 
 /* --------- Badges & légende --------- */
 .ghpd .badge{
@@ -166,13 +132,13 @@
   filter: drop-shadow(0 1px 4px rgba(0,0,0,.35));
 }
 
-/* Modal */
+/* --------- Modale GHPD --------- */
 .ghpd-modal-overlay{
   position:fixed; inset:0; background:rgba(15,23,42,.45);
   display:flex; align-items:center; justify-content:center; z-index:70;
 }
 .ghpd-modal{
-  width:min(940px, 92vw); max-height:86vh; overflow:auto;
+  width:80%; max-height:86vh; overflow:auto;
   background:var(--card,#fff); color:var(--text,#111);
   border:1px solid var(--border,#e5e7eb); border-radius:14px; padding:14px;
   box-shadow:0 20px 60px rgba(0,0,0,.35);
@@ -180,11 +146,10 @@
 .ghpd-modal .modal-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .ghpd-modal .modal-header h3{ margin:0; font-size:18px; }
 .ghpd-modal .modal-header{ border-left:5px solid var(--accent,#3b82f6); padding-left:10px; }
+/* Le style visuel des <button> est géré par le CSS général ; on garde juste l’ergonomie du bouton de fermeture */
 .ghpd-modal .modal-close{
-  font-size:22px; line-height:22px; padding:2px 8px; border-radius:10px;
-  border:1px solid var(--border,#e5e7eb); background:var(--input,#f8fafc); cursor:pointer;
+  cursor:pointer;
 }
-.ghpd-modal .modal-close:hover{ filter:brightness(.97); }
 .ghpd-modal .modal-kpis{
   display:grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr));
   gap:8px; margin:10px 0;
@@ -196,7 +161,42 @@
 .ghpd-modal .modal-kpis .k{ font-size:11px; color:var(--muted,#6b7280) }
 .ghpd-modal .modal-kpis .v{ font-weight:600 }
 .ghpd-modal .modal-table{ margin-top:6px; }
+
+/* Ajouts légers pour les vues “Texte/Graphiques” dans la modale */
+.ghpd-modal .modal-toolbar{
+  display:grid; gap:12px; align-items:center;
+  padding:8px 12px;
+  border-top:1px solid var(--border,#eee); border-bottom:1px solid var(--border,#eee);
+  background:var(--input,#fafafa);
+  margin-top:6px;
+}
+.ghpd-modal .modal-content{ padding: 8px 12px 14px; }
+
+/* ===== Deux graphiques côte à côte dans la modale GHPD ===== */
+.ghpd-modal .modal-charts{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;              /* espace entre les deux graphiques */
+  align-items: start;     /* aligne le haut des SVG de hauteurs différentes */
+}
+
+/* Les SVG remplissent bien leur cellule */
+.ghpd-modal .chart{
+  width: 100%;
+  display: block;
+}
+
+/* Responsive : empile en 1 colonne sur écrans étroits */
+@media (max-width: 900px){
+  .ghpd-modal .modal-charts{
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Empêcher le scroll body quand modale ouverte */
 body.modal-open{ overflow:hidden; }
+
 
 :root{
     --black: #010626;
@@ -232,6 +232,10 @@ body{
     display: flex;
     flex-direction: column;
     gap: 2rem;
+}
+
+#viz-container.maxime{
+    width: 100%;
 }
 
 .viz-content, #year-details{
