@@ -34,6 +34,18 @@ body{
     gap: 2rem;
 }
 
+#viz-container.maxime{
+    width: 80%;
+}
+
+#viz-container.antoine{
+    width: 90%;
+}
+
+.vmi{
+    width: 100%;
+}
+
 .viz-content, #year-details{
     background: rgba(255, 255, 255, 0.2);
     border-radius: 16px;
@@ -223,4 +235,113 @@ input[type="checkbox"]:checked::after {
 
 .dot{
     transition: all 500ms ease-in-out;
+}
+
+/* Base */
+input[type="range"]{
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;    /* on peint via les pseudos */
+  overflow: hidden;           /* clip du fill WebKit */
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+/* WebKit / Blink (Chrome, Edge, Safari) */
+input[type="range"]::-webkit-slider-runnable-track{
+  height: 8px;
+  background: #fff;           /* partie non remplie */
+  border-radius: 999px;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 8px;                /* TAILLE requise */
+  height: 16px;      
+  background: var(--light-blue);  /* curseur = orange */
+  border: none;
+  /* rempli à gauche = orange (hack sans JS) */
+  box-shadow: -1000px 0 0 1000px var(--orange);
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track{
+  height: 8px;
+  background: #fff;           /* non rempli */
+  border-radius: 999px;
+}
+input[type="range"]::-moz-range-progress{
+  height: 8px;
+  background: var(--orange);  /* rempli = orange */
+  border-radius: 999px;
+}
+input[type="range"]::-moz-range-thumb{
+  width: 16px;                /* TAILLE requise */
+  height: 16px;               /* TAILLE requise */
+  border-radius: 50%;
+  background: var(--orange);  /* curseur = orange */
+  border: none;
+}
+
+input[type="text"]{
+    all: unset;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background .3s ease-in-out;
+
+    box-sizing: border-box;
+    width: 100%;
+}
+
+input:hover{
+    background: #ff8f17a7;
+}
+
+
+#vmiNorm{
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px;
+    font-size: .8rem;
+}
+
+
+.vmi .select-wrap{ position:relative; }
+
+.vmi .select-wrap select{
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    all: unset;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+}
+
+.vmi .select-wrap i.fa-solid{
+  position:absolute;
+  right:10px;
+  top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;
+  color:var(--white);
+  opacity:.85;
+  font-size:14px;
+  transition: color 0.2s ease-in-out, opacity 0.2s ease-in-out;
+}
+
+.vmi .select-wrap:hover i.fa-solid {
+  color: var(--orange);
+  opacity: 1;
+  transition: color 0.2s ease-in-out;
 }
