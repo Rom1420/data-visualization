@@ -34,6 +34,14 @@ body{
     gap: 2rem;
 }
 
+#viz-container.antoine{
+    width: 90%;
+}
+
+.vmi{
+    width: 100%;
+}
+
 .viz-content, #year-details{
     background: rgba(255, 255, 255, 0.2);
     border-radius: 16px;
@@ -223,4 +231,51 @@ input[type="checkbox"]:checked::after {
 
 .dot{
     transition: all 500ms ease-in-out;
+}
+
+input[type='range'] {
+    overflow: visible;
+    width: 80px;
+    -webkit-appearance: none;
+    background-color: var(--orange);
+     width: 80%;
+    height: 6px;
+}
+    
+input[type='range']::-webkit-slider-runnable-track {
+    height: 10px;
+    -webkit-appearance: none;
+    color: var(--orange);
+    margin-top: -1px;
+}
+
+input[type="range"]::-moz-range-track {
+    height: 6px;
+    background-color: var(--orange);
+    border-radius: 3px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+    width: 20px;
+    -webkit-appearance: none;
+    height: 20px;
+    cursor: ew-resize;
+    background: var(--orange);
+    border-radius: 50%;
+    margin-top: -5px; /* centrer thumb sur la piste */
+}
+
+
+input[type="range"]::-moz-range-progress {
+  background-color: var(--orange); 
+}
+input[type="range"]::-moz-range-track {  
+  background-color: var(--orange);
+}
+/* IE*/
+input[type="range"]::-ms-fill-lower {
+  background-color: var(--orange); 
+}
+input[type="range"]::-ms-fill-upper {  
+  background-color: var(--orange);
 }

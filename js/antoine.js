@@ -7,15 +7,26 @@
     .vmi * { box-sizing: border-box; }
     .vmi { --bg:#0b1020; --panel:#121a33; --ink:#e7ecff; --muted:#9bb0ffcc; --grid:#2a355f; }
     .vmi .wrap { display:grid; grid-template-columns: 360px 1fr 360px; gap:16px; align-items:start; }
-    .vmi .panel{background:var(--panel); border:1px solid var(--grid); border-radius:14px; padding:14px; color:var(--ink);}
-    .vmi .panel h2{ margin:0 0 10px; font-size:14px; color:var(--muted); }
+    .vmi .panel{background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding:12px 14px; }
+    .vmi .panel h2{ margin:0 0 10px; font-size:14px; color:var(--white); }
     .vmi .row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .vmi .panel label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
-    .vmi input, .vmi select, .vmi .btn { background:#0c1430; color:var(--ink); border:1px solid var(--grid); border-radius:10px; padding:8px 10px; }
+    .vmi input, .vmi select, .vmi .btn { background:#0c1430; color:var(--ink); border-radius:10px; padding:8px 10px; }
     .vmi .btn{ cursor:pointer; }
     /* Colonne centrale = un seul "cell" de grille contenant viz + légende compacte */
     .vmi .center-col{ display:flex; flex-direction:column; gap:10px; }
-    .vmi .viz{ position:relative; height:66vh; background:linear-gradient(180deg,#0f1734,#0b1020); border:1px solid var(--grid); border-radius:14px; overflow:hidden; }
+    .vmi .viz{ position:relative; height:66vh; background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3); border-radius:14px; overflow:hidden; padding:20px;}
     .vmi .tooltip{ position:absolute; pointer-events:none; background:#0b1020; border:1px solid var(--grid); padding:10px 12px; font-size:12px; color:var(--ink); border-radius:10px; white-space:nowrap; box-shadow:0 10px 24px #0008; }
     .vmi table{ width:100%; border-collapse:collapse; font-size:12px; }
     .vmi th, .vmi td{ padding:6px 8px; border-bottom:1px solid var(--grid); text-align:left; color:var(--ink); }
