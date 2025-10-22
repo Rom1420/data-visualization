@@ -38,12 +38,21 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   // Tooltip
   const tooltip = d3.select("#viz-container")
     .append("div")
+    .attr("class", "tooltip")
+    .style("cursor","pointer") 
     .style("position", "absolute")
-    .style("background", "#fff")
-    .style("border", "1px solid #999")
-    .style("padding", "6px")
+    .style("background", "rgba(255, 255, 255, 0.15)") // effet glassmorphism cohérent avec le reste
+    .style("backdrop-filter", "blur(8px)")
+    .style("border-radius", "12px")
+    .style("border", "1px solid rgba(255, 255, 255, 0.3)")
+    .style("padding", "8px 12px")
+    .style("color", "var(--white)") // texte lisible
+    .style("font-size", "14px")
     .style("display", "none")
-    .style("pointer-events", "none");
+    .style("pointer-events", "none")
+    .style("box-shadow", "0 4px 30px rgba(0, 0, 0, 0.1)");
+
+let selectedYear = null;
 
   // Fonction pour filtrer et mettre à jour
   function updateChart() {
@@ -101,79 +110,111 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     // Cercles
     let circles = svg.selectAll(".dot").data(avgData, d => d.year);
 
-    circles.enter()
+    const allCircles = circles.enter()
       .append("circle")
       .attr("class", "dot")
       .attr("r", 4)
       .attr("fill", "var(--orange)")
       .merge(circles)
-      .transition().duration(500)
       .attr("cx", d => x(d.year))
       .attr("cy", d => y(normalizeBySize ? d.avgPricePerSqft : d.avgPrice));
 
-    circles.exit().remove();
+    // Tooltip
+    allCircles
+      .on("mouseover", (event, d) => {
+        tooltip
+          .style("display", "block")
+          .html(`Année: ${d.year}<br>${normalizeBySize ? "Prix moyen / m²" : "Prix moyen"}: €${(normalizeBySize ? d.avgPricePerSqft : d.avgPrice).toFixed(2)}`)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 30) + "px");
+      })
+      .on("mouseout", () => tooltip.style("display", "none"))
+      .on("click", (event, d) => {
+        selectedYear = d.year;
+        zoomOnYear(selectedYear);
+      });
 
-    circles.on("mouseover", (event, d) => {
-      tooltip.style("display", "block")
-        .html(`Année: ${d.year}<br>${normalizeBySize ? "Prix moyen / m²" : "Prix moyen"}: €${(normalizeBySize ? d.avgPricePerSqft : d.avgPrice).toFixed(2)}`)
-        .style("left", (event.pageX + 10) + "px")
-        .style("top", (event.pageY - 30) + "px");
-    }).on("mouseout", () => tooltip.style("display", "none"));
+      if(selectedYear !== null){
+        zoomOnYear(selectedYear);
+      }
   }
 
   // Initial
   updateChart();
 
-  // Ajouter les controls
-  const controls = d3.select("#viz-container")
-    .append("div")
-    .attr("class", "controls-container");
+  // Controls container
+const controls = d3.select("#viz-container")
+  .append("div")
+  .attr("class", "controls-container");
 
-  // Dropdown pays avec icône
-  const countryWrapper = controls.append("div").attr("class", "select-wrapper");
-  countryWrapper.append("select")
-    .on("change", function() {
-      selectedCountry = this.value;
-      updateChart();
-      countPropertiesByPrice(selectedCountry, data);
-    })
-    .selectAll("option")
-    .data(["All", ...Array.from(new Set(data.map(d => d.country)))])
-    .enter()
-    .append("option")
-    .text(d => d)
-    .attr("value", d => d);
+// Dropdown pays
+const countryWrapper = controls.append("div").attr("class", "select-wrapper");
+countryWrapper.append("select")
+  .on("change", function() {
+    selectedCountry = this.value;
+    updateChart();
+    countPropertiesByPrice(selectedCountry, data);
+  })
+  .selectAll("option")
+  .data(["All", ...Array.from(new Set(data.map(d => d.country)))])
+  .enter()
+  .append("option")
+  .text(d => d)
+  .attr("value", d => d);
+countryWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
-  countryWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
+// Dropdown type de bien
+const typeWrapper = controls.append("div").attr("class", "select-wrapper");
+typeWrapper.append("select")
+  .on("change", function() {
+    selectedType = this.value;
+    updateChart();
+  })
+  .selectAll("option")
+  .data(["All", ...Array.from(new Set(data.map(d => d.property_type)))])
+  .enter()
+  .append("option")
+  .text(d => d)
+  .attr("value", d => d);
+typeWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
 
-  // Dropdown type de bien avec icône
-  const typeWrapper = controls.append("div").attr("class", "select-wrapper");
-  typeWrapper.append("select")
-    .on("change", function() {
-      selectedType = this.value;
-      updateChart();
-    })
-    .selectAll("option")
-    .data(["All", ...Array.from(new Set(data.map(d => d.property_type)))])
-    .enter()
-    .append("option")
-    .text(d => d)
-    .attr("value", d => d);
+// Ligne avec toggle + bouton reset
+const lineControls = controls.append("div")
+  .style("display", "flex")
+  .style("align-items", "center");
 
-  typeWrapper.append("i").attr("class", "fa-solid fa-chevron-down");
+const resetControls = controls.append("div")
+  .style("display", "flex")
+  .style("align-items", "center");
 
-  // Toggle normalisation
-  controls.append("label")
-    .text(" Normaliser par surface")
-    .append("input")
-    .attr("type", "checkbox")
-    .on("change", function() {
-      normalizeBySize = this.checked;
-      updateChart();
-    });
-});
+// Toggle normalisation
+lineControls.append("label") 
+  .text(" Normaliser par surface") 
+  .append("input") 
+  .attr("type", "checkbox") 
+  .on("change", function() { normalizeBySize = this.checked; updateChart(); });
 
-// Fonction pour compter le nombre de biens par intervalles de prix pour un pays donné
+// Bouton reset
+resetControls.append("button")
+  .text("Reset")
+  .attr('class', 'reset-button')
+  .style("padding", "5px 10px")
+  .style("cursor", "pointer")
+  .on("click", () => {
+    selectedCountry = "All";
+    selectedType = "All";
+    normalizeBySize = false;
+
+    // reset les selects
+    countryWrapper.select("select").property("value", "All");
+    typeWrapper.select("select").property("value", "All");
+    lineControls.select("input").property("checked", false);
+
+    updateChart();
+  });
+
+
+  // Fonction pour compter le nombre de biens par intervalles de prix pour un pays donné
 function countPropertiesByPrice(country, data) {
   const filtered = country === "All" ? data : data.filter(d => d.country === country);
 
@@ -195,3 +236,125 @@ function countPropertiesByPrice(country, data) {
 
   return counts;
 }
+
+function zoomOnYear(year) {
+  let filteredYear = data;
+  if (selectedCountry !== "All") filteredYear = filteredYear.filter(d => d.country === selectedCountry);
+  if (selectedType !== "All") filteredYear = filteredYear.filter(d => d.property_type === selectedType);
+  filteredYear = filteredYear.filter(d => d.constructed_year === year);
+  // Nettoyer ancienne viz s’il y en a une
+  d3.select("#year-details").remove();
+
+  // Créer un conteneur sous le graphique principal
+  const detailSvg = d3.select("#viz-container")
+    .append("svg")
+    .attr("id", "year-details")
+    .attr("width", width)
+    .attr("height", 300);
+
+  // Créer un histogramme des prix
+  const xHist = d3.scaleLinear()
+    .domain([0, d3.max(filteredYear, d => d.price)])
+    .range([margin.left, width - margin.right]);
+
+  const bins = d3.histogram()
+    .domain(xHist.domain())
+    .thresholds(20)
+    (filteredYear.map(d => d.price));
+
+  const yHist = d3.scaleLinear()
+    .domain([0, d3.max(bins, d => d.length)])
+    .range([250, margin.top]);
+
+  detailSvg.selectAll("rect")
+  .data(bins)
+  .enter()
+  .append("rect")
+  .style("cursor","pointer")
+  .attr("class", "bar-romain")
+  .attr("x", d => xHist(d.x0))
+  .attr("y", d => yHist(d.length))
+  .attr("width", d => xHist(d.x1) - xHist(d.x0) - 1)
+  .attr("height", d => 250 - yHist(d.length))
+  .attr("fill", "var(--orange)")
+  .on("mouseover", (event, d) => {
+    histTooltip
+      .style("display", "block")
+      .html(`Prix: €${Math.round(d.x0).toLocaleString()} - €${Math.round(d.x1).toLocaleString()}<br>Ventes: ${d.length}`)
+      .style("left", (event.pageX + 10) + "px")
+      .style("top", (event.pageY - 30) + "px");
+  })
+  .on("mouseout", () => histTooltip.style("display", "none"));
+
+
+  detailSvg.append("text")
+    .attr("x", width / 2)
+    .attr("y", 20)
+    .attr("text-anchor", "middle")
+    .attr("fill", "var(--white)")
+    .text(`Répartition des prix - Année ${year}`);
+
+    detailSvg.selectAll(".label")
+  .data(bins)
+  .enter()
+  .append("text")
+  .attr("x", d => (xHist(d.x0) + xHist(d.x1)) / 2)
+  .attr("y", d => yHist(d.length) - 5)
+  .attr("text-anchor", "middle")
+  .attr("fill", "var(--white)")
+  .attr("font-size", "12px")
+  .text(d => d.length > 0 ? d.length : "");
+
+
+  
+const histTooltip = d3.select("#viz-container")
+    .append("div")
+    .attr("class", "tooltip")
+    .style("cursor","pointer") 
+    .style("position", "absolute")
+    .style("background", "rgba(255, 255, 255, 0.15)")
+    .style("z-index", "100")
+    .style("backdrop-filter", "blur(8px)")
+    .style("border-radius", "12px")
+    .style("border", "1px solid rgba(255, 255, 255, 0.3)")
+    .style("padding", "8px 12px")
+    .style("color", "var(--white)") // texte lisible
+    .style("font-size", "14px")
+    .style("display", "none")
+    .style("pointer-events", "none")
+    .style("box-shadow", "0 4px 30px rgba(0, 0, 0, 0.1)");
+
+// Ajouter une légende pour les prix sous l'histogramme
+const legendMargin = 10; // marge sous les bars
+const legendY = 250 + legendMargin; // 250 = base de l’histogramme
+
+const legend = detailSvg.append("g")
+    .attr("class", "legend")
+    .attr("transform", `translate(${margin.left -80}, ${legendY})`);
+
+const xTicks = xHist.ticks(5);
+
+legend.selectAll("line")
+  .data(xTicks)
+  .enter()
+  .append("line")
+  .attr("x1", d => xHist(d))
+  .attr("x2", d => xHist(d))
+  .attr("y1", 0)
+  .attr("y2", 6)
+  .attr("stroke", "var(--white)");
+
+legend.selectAll("text")
+  .data(xTicks)
+  .enter()
+  .append("text")
+  .attr("x", d => xHist(d))
+  .attr("y", 20) // texte sous la petite ligne
+  .attr("text-anchor", "middle")
+  .attr("fill", "var(--white)")
+  .attr("font-size", "12px")
+  .text(d => `€${(Math.round(d / 1000) * 1000).toLocaleString()}`);
+} 
+});
+
+
