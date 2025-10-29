@@ -345,3 +345,117 @@ input:hover{
   opacity: 1;
   transition: color 0.2s ease-in-out;
 }
+
+/* Tooltip */
+#tooltip {
+  position: absolute;
+  background: white;
+  border: 1px solid #333;
+  padding: 8px;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+  line-height: 1.4em;
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+/* Détails d'une ville (histogramme + infos) */
+#city-details {
+  margin-top: 25px;
+  padding: 15px;
+  background: #f9f9f9;
+  border: 1px solid #999;
+  border-radius: 6px;
+  display: inline-block;
+  text-align: left;
+}
+
+/* Panneau d'infos à gauche de l’histogramme */
+#city-info {
+  display: inline-block;
+  vertical-align: top;
+  width: 200px;
+  margin-right: 20px;
+}
+
+#city-info h4 {
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 5px;
+}
+
+#city-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* Amélioration des axes */
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #888;
+  shape-rendering: crispEdges;
+}
+
+/* Barres de l’histogramme */
+rect {
+  transition: fill 0.3s, height 0.3s;
+}
+
+rect:hover {
+  opacity: 0.8;
+}
+/* Fond spécifique pour le scatter plot SVG */
+#viz-container #julien{
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+#filters-panel {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+#comparison-panel {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+#city-details {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 15px;
+  
+}
+
+#quartier-info-panel {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 15px;
+  
+}
