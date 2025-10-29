@@ -221,6 +221,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     // Créer le SVG
     const svg = d3.select("#viz-container")
       .append("svg")
+      .attr("id", "julien")
       .attr("width", width)
       .attr("height", height);
 
