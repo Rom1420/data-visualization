@@ -5,34 +5,57 @@
   function injectScopedStyles(rootEl) {
     const css = `
     .vmi * { box-sizing: border-box; }
-    .vmi { --bg:#0b1020; --panel:#121a33; --ink:#e7ecff; --muted:#9bb0ffcc; --grid:#2a355f; }
+    .vmi {
+      --bg:#0b1020; --panel:#121a33; --ink:#e7ecff; --muted:#9bb0ffcc; --grid:#2a355f;
+      --accent:#f5b342;
+    }
     .vmi .wrap { display:grid; grid-template-columns: 300px 1fr 300px; gap:16px; align-items:start; }
-    .vmi .panel{background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding:12px 14px; }
-    .vmi .panel h2{ margin:0 0 10px; font-size:14px; color:var(--white); }
+
+    .vmi .panel{
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding:12px 14px;
+    }
+    .vmi .panel h2{ margin:0 0 10px; font-size:14px; color:var(--ink); }
     .vmi .row.firstrow{ display:grid; grid-template-columns: 60% 30%; gap:10px; }
     .vmi .row{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
     .vmi .panel label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
-    .vmi .btn{ cursor:pointer; }
-    /* Colonne centrale = un seul "cell" de grille contenant viz + légende compacte */
-    .vmi .center-col{ display:flex; flex-direction:column; gap:10px; }
-    .vmi .viz{ position:relative; height:66vh; background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3); border-radius:14px; overflow:hidden; padding:20px;}
-    .vmi .tooltip{ position:absolute; pointer-events:none; background:#0b1020; border:1px solid var(--grid); padding:10px 12px; font-size:12px; color:var(--ink); border-radius:10px; white-space:nowrap; box-shadow:0 10px 24px #0008; }
-    .vmi table{ width:100%; border-collapse:collapse; font-size:12px; }
-    .vmi th, .vmi td{ padding:6px 8px; border-bottom:1px solid var(--grid); text-align:left; color:var(--ink); }
+    .vmi .btn{ cursor:pointer; padding:6px 10px; border-radius:999px; border:1px solid var(--grid); background:#0f1630; color:var(--ink); }
     .vmi .btn[disabled]{ opacity:.5; cursor:not-allowed; }
 
-    /* Légende COMPACTE sous la treemap (pas un gros bloc) */
+    /* Colonne centrale : viz + légende compacte */
+    .vmi .center-col{ display:flex; flex-direction:column; gap:10px; }
+    .vmi .viz{
+      position:relative; height:66vh;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 14px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      overflow:hidden; padding:20px;
+    }
+    /* Bouton Retour flottant (dans la viz) */
+    .vmi .back-fab{
+      position:absolute; top:10px; left:10px; z-index:5;
+      padding:6px 12px; font-size:12px; font-weight:600;
+      border-radius:999px; border:1px solid var(--grid);
+      background:rgba(10,14,30,0.9); color:var(--ink);
+      box-shadow:0 8px 20px rgba(0,0,0,.35);
+    }
+    .vmi .back-fab:hover{ transform:translateY(-1px); transition: transform .12s ease; }
+
+    .vmi .tooltip{
+      position:absolute; pointer-events:none; background:#0b1020;
+      border:1px solid var(--grid); padding:10px 12px; font-size:12px; color:var(--ink);
+      border-radius:10px; white-space:nowrap; box-shadow:0 10px 24px #0008;
+    }
+
+    /* Légende compacte sous la treemap */
     .vmi .legend-inline{ display:flex; align-items:center; gap:10px; }
     .vmi .legend-inline .label{ min-width:86px; color:#cbd5ff; font-size:12px; }
     .vmi .legend-inline .bar-wrap{ flex:1; }
@@ -41,15 +64,72 @@
     .vmi .legend-inline .size-key{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
     .vmi .legend-inline .size-swatch{ width:14px; height:10px; border-radius:4px; background:#6b82ff44; border:1px solid #6b82ff88; }
 
-    /* Contenu "tous les biens" dans la tuile ville (mode zoom ville) */
-    .vmi .city-fo-wrap{ width:100%; height:100%; padding:10px; }
-    .vmi .city-card{
+    /* Etiquettes centrées dans les tuiles */
+    .vmi .tile-label{
       width:100%; height:100%;
-      background:rgba(0,0,0,.25); border:1px solid var(--grid); border-radius:12px;
-      overflow:auto; color:var(--ink);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      text-align:center; padding:6px; pointer-events:none;
     }
-    .vmi .city-card h3{ margin:10px; font-size:14px; }
-    .vmi .city-card thead th{ position:sticky; top:0; background:#0b1020; z-index:1; }
+    .vmi .tile-label .city{
+      font-weight:800; line-height:1.05; font-size:13px; color:#fff;
+      text-shadow:0 1px 2px #000a, 0 0 8px #0008;
+    }
+    .vmi .tile-label .country{
+      font-size:11px; color:#e0e8ffcc; margin-top:2px;
+      text-shadow:0 1px 2px #000a, 0 0 8px #0008;
+    }
+
+    /* Vue VILLE (contenu dans la tuile) — carte + bannière + cards */
+    .vmi .city-fo-wrap{ width:100%; height:100%; padding:8px; }
+    .vmi .city-card{
+      width:100%; height:100%; display:flex; flex-direction:column;
+      background:rgba(20,25,50,0.45);
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:14px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow:auto; color:var(--ink);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+    }
+    /* Bannière collante */
+    .vmi .city-banner{
+      position:sticky; top:0; z-index:3; margin:8px; padding:10px 12px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      color:#191b22; font-weight:700; letter-spacing:.2px;
+      background:linear-gradient(90deg, var(--accent), #f39e3d);
+      border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,.25);
+    }
+    .vmi .city-banner .title{ font-size:14px; }
+    .vmi .city-banner .meta{ font-size:12px; opacity:.9; }
+
+    /* Grille de petites cartes (annonces) */
+    .vmi .listing-grid{
+      display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap:10px; padding: 8px 12px 14px 12px;
+    }
+    .vmi .listing-card{
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.15);
+      border-radius:12px; padding:10px;
+      box-shadow:0 4px 16px rgba(0,0,0,.18);
+      transition:transform .12s ease, box-shadow .12s ease;
+    }
+    .vmi .listing-card:hover{ transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,.28); }
+    .vmi .listing-head{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px; }
+    .vmi .listing-head .id{ font-weight:800; letter-spacing:.3px; opacity:.9; }
+    .vmi .listing-head .type{ font-size:12px; color:#dfe6ff; }
+    .vmi .chip{
+      font-size:12px; font-weight:800; padding:2px 8px; border-radius:999px;
+      background:rgba(245,179,66,.15); border:1px solid rgba(245,179,66,.5); color:#ffd18a;
+      white-space:nowrap;
+    }
+    .vmi .listing-body .row{ display:flex; align-items:center; justify-content:space-between; font-size:12px; padding:2px 0; color:#e6ebff; }
+    .vmi .listing-body .row .label{ color:#cdd7ff; opacity:.85; }
+    .vmi .listing-body .row .val{ font-variant-numeric: tabular-nums; }
+
+    /* Table générique (encore utilisée côté panneau droit) */
+    .vmi table{ width:100%; border-collapse:collapse; font-size:12px; }
+    .vmi th, .vmi td{ padding:6px 8px; border-bottom:1px solid var(--grid); text-align:left; color:var(--ink); }
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -67,7 +147,7 @@
     container.appendChild(root);
     injectScopedStyles(root);
 
-    // Header
+    // Header (sans bouton Retour ici)
     const header = document.createElement('div');
     header.className = 'panel';
     header.style.marginBottom = '12px';
@@ -75,8 +155,7 @@
       <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
         <div><strong>Value-for-Money Index (VMI) — Global House Purchase</strong></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn" id="vmiBack" disabled>Retour</button>
-          <button class="btn" id="vmiReset">Réinitialiser</button>
+          <button class="btn" id="vmiReset"></button>
         </div>
       </div>`;
     root.appendChild(header);
@@ -109,8 +188,8 @@
         </div>
         <div>
           <label>Année min. de constr.</label>
-          <input type="range" id="vmiYearMin" min="1900" max="2025" step="1" value="1900"/>
-          <div style="font-size:12px;color:var(--muted)"><span id="vmiYearMinVal">1900</span> → 2025</div>
+          <input type="range" id="vmiYearMin" min="1900" max="2023" step="1" value="1900"/>
+          <div style="font-size:12px;color:var(--muted)"><span id="vmiYearMinVal">1900</span> → 2023</div>
         </div>
       </div>
 
@@ -151,11 +230,12 @@
     `;
     wrap.appendChild(left);
 
-    // CENTRE — une seule cellule de grille: treemap + légende compacte dessous
+    // CENTRE — treemap + légende + bouton retour flottant
     const centerCol = document.createElement('section');
     centerCol.className = 'center-col';
     centerCol.innerHTML = `
       <div class="viz">
+        <button class="btn back-fab" id="vmiBackFloat" style="display:none;">← Retour</button>
         <svg id="vmiTreemap" width="100%" height="100%"></svg>
         <div class="tooltip" id="vmiTip" style="opacity:0;"></div>
       </div>
@@ -170,7 +250,7 @@
     `;
     wrap.appendChild(centerCol);
 
-    // DROITE — détails (sidebar alignée en haut)
+    // DROITE — détails
     const right = document.createElement('aside');
     right.className = 'panel';
     right.style.alignSelf = 'start';
@@ -201,7 +281,7 @@
       norm: left.querySelector('#vmiNorm'),
       reset: header.querySelector('#vmiReset'),
       resetFilters: left.querySelector('#vmiResetFilters'),
-      back: header.querySelector('#vmiBack'),
+      backFloat: centerCol.querySelector('#vmiBackFloat'),
     };
 
     const det = {
@@ -334,16 +414,15 @@
       svg.attr('viewBox', `0 0 ${w} ${h}`);
       svg.selectAll('*').remove();
 
-      // --- Mode ZOOM VILLE : une seule tuile + liste complète intégrée dans la tuile
+      // --- Mode ZOOM VILLE : tuile unique + cartes
       if (zoomCityKey) {
         const city = byCity.get(zoomCityKey);
         if (!city) { zoomCityKey = null; renderTreemap(); return; }
 
-        // fond pour retour
+        // fond clic -> retour
         svg.append('rect').attr('x',0).attr('y',0).attr('width',w).attr('height',h)
           .attr('fill','transparent').on('click', ()=> goBack());
 
-        // carte unique
         const pad = 10;
         const g = svg.append('g').attr('transform', `translate(${pad},${pad})`);
         const rw = Math.max(0, w - pad*2), rh = Math.max(0, h - pad*2);
@@ -354,32 +433,43 @@
           .attr('fill', color(city.vmiAvg))
           .attr('stroke', '#0008');
 
-        // foreignObject contenant TOUTES les annonces
+        // foreignObject contenant TOUTES les annonces (version cards)
         const fo = g.append('foreignObject')
           .attr('x', 8).attr('y', 8)
           .attr('width', Math.max(0, rw - 16))
           .attr('height', Math.max(0, rh - 16));
 
         const rows = [...city.rows].sort((a,b)=>b.vmi_unit-a.vmi_unit);
-        const header = `<h3>${city.city} — ${city.country} • ${rows.length} annonces</h3>`;
-        const tableHead = `<table><thead><tr>
-          <th>ID</th><th>Type</th><th>Taille</th><th>Prix</th><th>Prix/m²</th><th>VMI</th>
-        </tr></thead><tbody>`;
-        const body = rows.map(r=>{
+
+        const cards = rows.map(r=>{
           const pps = r.price_per_sqm || 0;
-          return `<tr>
-            <td>${r.property_id}</td>
-            <td>${r.property_type||'-'}</td>
-            <td>${fmt(r.property_size_sqft)}</td>
-            <td>${fmt(r.price)}</td>
-            <td>${fmt(pps)}</td>
-            <td>${d3.format('.3s')(r.vmi_unit)}</td>
-          </tr>`;
+          return `
+            <div class="listing-card">
+              <div class="listing-head">
+                <span class="id">#${r.property_id}</span>
+                <span class="type">${r.property_type || '-'}</span>
+                <span class="chip">${d3.format('.3s')(r.vmi_unit)}</span>
+              </div>
+              <div class="listing-body">
+                <div class="row"><span class="label">Taille</span><span class="val">${fmt(r.property_size_sqft)} ft²</span></div>
+                <div class="row"><span class="label">Prix</span><span class="val">${fmt(r.price)}</span></div>
+                <div class="row"><span class="label">Prix/m²</span><span class="val">${fmt(pps)}</span></div>
+              </div>
+            </div>
+          `;
         }).join('');
-        const html = `<div xmlns="http://www.w3.org/1999/xhtml" class="city-fo-wrap">
-            <div class="city-card">${header}${tableHead}${body}</tbody></table></div>
-          </div>`;
-        fo.html(html);
+
+        const html = `
+  <div xmlns="http://www.w3.org/1999/xhtml" class="city-fo-wrap">
+    <div class="city-card">
+      <div class="city-banner">
+        <div class="title">${city.city} — ${city.country}</div>
+        <div class="meta">${rows.length} annonces</div>
+      </div>
+      <div class="listing-grid">${cards}</div>
+    </div>
+  </div>`;
+        fo.node().innerHTML = html;
 
         // Détails (sidebar) épinglés pour cohérence
         updateDetails(city, true);
@@ -428,18 +518,16 @@
         .attr('fill', d=>color(d.data.data.vmiAvg))
         .attr('stroke','#0008');
 
+      // Etiquette centrée dans la tuile
       nodes.append('foreignObject')
         .attr('width', d=>Math.max(0,d.x1-d.x0))
         .attr('height', d=>Math.max(0,d.y1-d.y0))
         .append('xhtml:div')
-        .style('padding','6px')
-        .style('font-size','12px')
-        .style('color','#fff')
+        .attr('class','tile-label')
         .style('opacity', d => ((d.x1-d.x0)>90 && (d.y1-d.y0)>38) ? 1 : 0.85)
-        .style('pointer-events','none')
-        .html(d=>`<div><b>${d.data.name}</b><br/><span style="color:#cbd5ff">${d.data.data.country}</span></div>`);
+        .html(d=>`<div class="city">${d.data.name}</div><div class="country">${d.data.data.country}</div>`);
 
-      // Interactions (tooltip anti-dépassement)
+      // Interactions
       nodes
         .on('mousemove', (ev,d)=>{
           const city = d.data.data;
@@ -463,7 +551,7 @@
             zoomCityKey = null;
             draw();
           } else {
-            // 2e niveau : zoom VILLE (tuile unique + toutes les annonces DANS la tuile)
+            // 2e niveau : zoom VILLE
             zoomCityKey = city.key;
             draw();
           }
@@ -490,7 +578,7 @@
         <div style="color:var(--muted)">VMI (moy.)</div><div>${d3.format('.3s')(city.vmiAvg)}</div>
       `;
 
-      // Top 5 (la liste complète s'affiche maintenant dans la tuile en mode "ville")
+      // Top 5 (la grille complète est dans la tuile en mode "ville")
       const top5 = [...city.rows].sort((a,b)=>b.vmi_unit-a.vmi_unit).slice(0,5);
       const topHtml = [`<table><thead><tr><th>ID</th><th>Taille</th><th>Prix</th><th>Prix/m²</th><th>VMI</th></tr></thead><tbody>`];
       top5.forEach(r=>{
@@ -514,7 +602,8 @@
     }
 
     function updateBackButton(){
-      controls.back.disabled = !(zoomCityKey || zoomCountry);
+      const visible = (zoomCityKey || zoomCountry);
+      controls.backFloat.style.display = visible ? 'inline-flex' : 'none';
     }
 
     function draw(){
@@ -536,7 +625,7 @@
       draw();
     }
 
-    // Tooltip helpers — garde l’infobulle dans le cadre, même en haut
+    // Tooltip helpers — garde l’infobulle dans le cadre
     function showTooltip(px, py, html){
       tip.html(html).style('opacity', 1);
       const tipEl = tip.node();
@@ -546,7 +635,6 @@
       const W = vizEl.clientWidth;
       const H = vizEl.clientHeight;
 
-      // par défaut au-dessus; sinon dessous
       let left = px + 12;
       let top = py - th - 8;
       if (top < pad) top = py + 12; // bas si trop haut
@@ -556,7 +644,7 @@
     }
     function hideTooltip(){ tip.style('opacity',0); }
 
-    // Events
+    // Événements
     [['input',controls.q],['change',controls.priceQ],['change',controls.yearMin],
      ['change',controls.wn],['change',controls.wc],['change',controls.ws],['change',controls.norm]]
      .forEach(([ev,el])=> el.addEventListener(ev, ()=>{
@@ -585,7 +673,8 @@
       draw();
     });
 
-    controls.back.addEventListener('click', ()=>{ goBack(); });
+    // Bouton retour flottant
+    controls.backFloat.addEventListener('click', (e)=>{ e.stopPropagation(); goBack(); });
 
     window.addEventListener('resize', renderTreemap);
 
