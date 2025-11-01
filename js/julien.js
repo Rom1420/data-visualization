@@ -1,12 +1,9 @@
+(() => {
 const width = 800, height = 500;
 
-// Créer le conteneur principal si nécessaire
-let container = document.getElementById("viz-container");
-if (!container) {
-  container = document.createElement("div");
-  container.id = "viz-container";
-  document.body.appendChild(container);
-}
+// Sélectionner le conteneur principal existant et le vider
+const container = document.getElementById("viz-container");
+d3.select("#viz-container").html("");
 
 // Déclaration de la variable globale pour stocker les filtres courants
 let currentFilters = {
@@ -34,7 +31,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   allCountriesBtn.innerText = "Tous les pays";
   allCountriesBtn.style.margin = "10px";
   allCountriesBtn.onclick = () => renderScatter();
-  document.body.insertBefore(allCountriesBtn, container);
+  container.prepend(allCountriesBtn);
 
   // Bouton pour activer/désactiver le mode comparaison
   const compareModeBtn = document.createElement("button");
@@ -57,7 +54,7 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   };
   
   // Insérer le bouton à côté du bouton "Tous les pays"
-  document.body.insertBefore(compareModeBtn, allCountriesBtn.nextSibling);
+  container.insertBefore(compareModeBtn, allCountriesBtn.nextSibling);
 
   // Fonction réutilisable pour générer le scatter plot
   // Ajout d'un paramètre optionnel filteredData
@@ -70,9 +67,9 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
     d3.select("#comparison-panel").remove();
 
     // Ajout du panneau de filtres au-dessus du scatter plot (sans panneau à gauche)
-    const filtersPanel = d3.select("body")
-      .insert("div", "#viz-container")
-      .attr("id", "filters-panel")
+    const filtersPanel = d3.select("#viz-container")
+      .insert("div", ":first-child")
+      .attr("id", "filters-panel");
 
     // Créer les éléments de filtre sans écraser les valeurs
     // Utiliser currentFilters pour initialiser les valeurs (pas de .html qui écrase)
@@ -762,3 +759,4 @@ d3.csv("../data/global_house_purchase_dataset.csv").then(data => {
   // Initialisation automatique sans paramètre
   renderScatter();
 });
+})();
