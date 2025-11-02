@@ -1,8 +1,6 @@
 // js/matice.js
-// Carte choroplèthe (log) des biens par pays.
-// VUE GLOBALE : points de villes (rayon ∝ √(comptage)) + clic ville => panneau "details on demand" (sans zoom).
-// ZOOM PAYS   : treemap des villes (en haut du panneau) + détails pays en dessous (panneau scrollable).
-// Fix label : texte du pays non-scalé (layer séparé). Contours noirs. Filtres dynamiques.
+// Carte choroplèthe (échelle log) + tiroir droit local à la page (Treemap, Détails bruts, Filtres)
+// Dépendances : d3 v7, topojson-client v3, ../data/global_house_purchase_dataset.csv, ../data/worldcities.csv
 
 (function () {
   if (typeof topojson === "undefined") {
@@ -11,20 +9,19 @@
     );
   }
 
+  // ---- Chemins & constantes
   const CSV_PATH = "../data/global_house_purchase_dataset.csv";
   const WORLD_URL =
     "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
-  const CITY_DB_LOCAL = "../data/worldcities.csv"; // city,country,lat,long
+  const CITY_DB_LOCAL = "../data/worldcities.csv"; // city,country,lat,lng
+
+  const MAP_H = 600;
+  const PANEL_W = 420;
+  const GAP = 12;
+  const TREEMAP_H = 300;
 
   const OUT_OF_RANGE_FILL = "#f2f2f2";
   const HOVER_GLOW_COLOR = "#222";
-
-  // Treemap layout interne au panneau
-  const PANEL_W = 420,
-    PANEL_H = 460;
-  const PANEL_X = 980 - PANEL_W - 18; // width - PANEL_W - margin
-  const PANEL_Y = 20;
-  const TREEMAP_H = 260; // hauteur réservée à la treemap dans le panneau focus
 
   const COUNTRY_ALIAS = new Map([
     ["USA", "United States of America"],
@@ -42,36 +39,41 @@
       .normalize("NFKD")
       .replace(/\p{Diacritic}/gu, "");
 
-  // ---------- Conteneur ----------
+  // ---- Racine / Scope page
   const host = d3.select("#viz-container");
   host.html("");
-  const root = host
+  // Nettoyage défensif d’un éventuel tiroir global laissé par un ancien run
+  d3.selectAll("#side-drawer,#drawer-handle").remove();
+
+  const container = host
     .append("div")
     .attr("id", "vis")
-    .style("user-select", "none")
-    .style("max-width", "1000px")
-    .style("margin", "0 auto");
+    .style("position", "relative")
+    .style("width", "100vw"); // ← pleine largeur viewport
 
-  const width = 980,
-    height = 600;
-  const svg = root
+  // Wrapper carte + svg (plus de centrage ni max-width)
+  const mapWrap = container
+    .append("div")
+    .attr("id", "map-wrap")
+    .style("width", "100%")
+    .style("margin", "0");
+
+  let mapW = 980; // recalé par layout()
+  const svg = mapWrap
     .append("svg")
-    .attr("width", width)
-    .attr("height", height)
-    .style("display", "block")
-    .style("margin", "0 auto")
-    .style("user-select", "none");
+    .attr("width", mapW)
+    .attr("height", MAP_H)
+    .style("display", "block");
 
   // Couches
   const gSphere = svg.append("g");
   const gCountries = svg.append("g");
-  const gFocus = svg.append("g"); // polygone pays zoomé (scalé)
-  const gLabels = svg.append("g"); // labels non-scalés
-  const gCities = svg.append("g"); // points VILLES (vue globale uniquement)
-  const gDetail = svg.append("g"); // panneau treemap/détails (droite)
-  const gUI = svg.append("g"); // légende, boutons
+  const gFocus = svg.append("g");
+  const gLabels = svg.append("g");
+  const gCities = svg.append("g");
+  const gUI = svg.append("g");
 
-  // Tooltip
+  // Tooltip global
   const tooltip = d3
     .select("body")
     .append("div")
@@ -79,19 +81,21 @@
     .style("position", "fixed")
     .style("pointer-events", "none")
     .style("padding", "6px 8px")
-    .style("background", "rgba(0,0,0,.75)")
+    .style("background", "rgba(0,0,0,.85)")
     .style("color", "#fff")
     .style("border-radius", "4px")
     .style("font", "12px system-ui,Segoe UI,Roboto,Arial")
-    .style("opacity", 0);
+    .style("max-width", "300px")
+    .style("opacity", 0)
+    .style("z-index", "10000"); // au-dessus du tiroir
 
-  // Projection / path
-  const projection = d3
+  // Projection / path (mis à jour par layout())
+  let projection = d3
     .geoNaturalEarth1()
-    .fitSize([width, height], { type: "Sphere" });
-  const path = d3.geoPath(projection);
+    .fitSize([mapW, MAP_H], { type: "Sphere" });
+  let path = d3.geoPath(projection);
 
-  // defs: hover glow
+  // defs: glow
   const defs = svg.append("defs");
   const glow = defs.append("filter").attr("id", "hover-glow");
   glow
@@ -102,7 +106,7 @@
   feMerge.append("feMergeNode").attr("in", "coloredBlur");
   feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-  // Bouton reset
+  // Bouton reset (carte)
   const resetBtn = gUI
     .append("g")
     .attr("transform", `translate(20,20)`)
@@ -124,183 +128,155 @@
     .attr("font-size", 12)
     .attr("fill", "#333");
 
-  // Toggle treemap +/− (visible en focus pays)
-  let treemapVisible = true;
-  const treemapToggle = gUI
-    .append("g")
-    .attr("transform", `translate(${width - 48},20)`)
-    .style("cursor", "pointer")
-    .style("display", "none")
-    .on("click", () => {
-      treemapVisible = !treemapVisible;
-      gDetail
-        .selectAll(".treemap-block")
-        .style("display", treemapVisible ? null : "none");
-      treemapToggle.select("text").text(treemapVisible ? "−" : "+");
-      treemapToggle
-        .select("title")
-        .text(treemapVisible ? "Masquer la treemap" : "Afficher la treemap");
-    });
-  treemapToggle
-    .append("rect")
-    .attr("width", 28)
-    .attr("height", 28)
-    .attr("rx", 6)
-    .attr("fill", "#fff")
-    .attr("stroke", "#ddd");
-  treemapToggle
-    .append("text")
-    .attr("x", 14)
-    .attr("y", 18)
-    .attr("text-anchor", "middle")
-    .attr("font-size", 18)
-    .attr("font-weight", 700)
-    .attr("fill", "#333")
-    .text("−");
-  treemapToggle.append("title").text("Masquer la treemap");
-
-  // Fond + graticule
-  gSphere
-    .append("path")
-    .attr("d", path({ type: "Sphere" }))
-    .attr("fill", "#eef5ff");
-  gSphere
-    .append("path")
-    .attr("d", path(d3.geoGraticule10()))
-    .attr("stroke", "#cdd6e0")
-    .attr("fill", "none")
-    .attr("opacity", 0.5);
-
-  function drawLegendLog(minPos, maxVal) {
-    gUI.selectAll(".legend").remove();
-
-    const legendW = 180,
-      legendH = 12,
-      gradId = "legendGradDyn";
-    const lg = defs.select(`#${gradId}`).empty()
-      ? defs
-          .append("linearGradient")
-          .attr("id", gradId)
-          .attr("x1", "0%")
-          .attr("x2", "100%")
-      : defs.select(`#${gradId}`);
-    lg.selectAll("stop").remove();
-    for (let i = 0; i <= 10; i++) {
-      lg.append("stop")
-        .attr("offset", `${i * 10}%`)
-        .attr("stop-color", d3.interpolateYlOrRd(i / 10));
-    }
-
-    const legend = gUI
-      .append("g")
-      .attr("class", "legend")
-      .attr("transform", `translate(${width - legendW - 20},${height - 88})`);
-
-    legend
-      .append("text")
-      .text("Densité de biens (log)")
-      .attr("y", -6)
-      .attr("font-size", 12)
-      .attr("fill", "#333");
-
-    legend
-      .append("rect")
-      .attr("width", legendW)
-      .attr("height", legendH)
-      .attr("fill", `url(#${gradId})`);
-
-    legend
-      .append("text")
-      .text(minPos)
-      .attr("y", legendH + 14)
-      .attr("font-size", 11)
-      .attr("fill", "#333");
-
-    legend
-      .append("text")
-      .text(maxVal)
-      .attr("x", legendW)
-      .attr("y", legendH + 14)
-      .attr("text-anchor", "end")
-      .attr("font-size", 11)
-      .attr("fill", "#333");
-
-    legend
-      .append("rect")
-      .attr("x", 0)
-      .attr("y", legendH + 24)
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("fill", OUT_OF_RANGE_FILL)
-      .attr("stroke", "#ddd");
-    legend
-      .append("text")
-      .text("Hors tranche (0)")
-      .attr("x", 18)
-      .attr("y", legendH + 34)
-      .attr("font-size", 11)
-      .attr("fill", "#333");
+  function drawSphere() {
+    gSphere.selectAll("*").remove();
+    gSphere
+      .append("path")
+      .attr("d", path({ type: "Sphere" }))
+      .attr("fill", "#eef5ff");
+    gSphere
+      .append("path")
+      .attr("d", path(d3.geoGraticule10()))
+      .attr("stroke", "#cdd6e0")
+      .attr("fill", "none")
+      .attr("opacity", 0.5);
   }
-
-  svg.on("dblclick", (event) => {
-    event.preventDefault();
+  svg.on("dblclick", (e) => {
+    e.preventDefault();
     resetZoom();
   });
 
-  // ====== Filtres (locaux, sous la viz) ======
-  const filterWrapper = root
-    .append("div")
-    .attr("id", "filters-wrapper")
-    .style("max-width", `${width}px`)
-    .style("margin", "14px auto 0 auto");
+  // ---- Tiroir à droite (local au container, collé au bord droit)
+  let drawerOpen = true;
 
-  const filterToggle = filterWrapper
-    .append("button")
-    .attr("id", "filters-toggle")
-    .text("Filtres")
-    .style("display", "none")
-    .style("padding", "8px 12px")
-    .style("border", "0")
-    .style("border-radius", "8px")
-    .style("background", "#111")
-    .style("color", "#fff")
-    .style("cursor", "pointer")
-    .style("box-shadow", "0 6px 24px rgba(0,0,0,.12)");
-
-  const filterDiv = filterWrapper
+  const drawer = container
     .append("div")
-    .attr("id", "filters-panel")
-    .style("background", "#ffffff")
-    .style("border", "1px solid #e5e7eb")
-    .style("border-radius", "10px")
-    .style("box-shadow", "0 6px 24px rgba(0,0,0,.08)")
-    .style("padding", "12px")
-    .style("font", "12px system-ui,Segoe UI,Roboto,Arial")
+    .attr("id", "side-drawer")
+    .style("position", "absolute")
+    .style("top", "0")
+    .style("right", "0")
+    .style("height", MAP_H + "px")
+    .style("width", PANEL_W + "px")
+    .style("background", "#fff")
+    .style("border-left", "1px solid #e5e7eb")
+    .style("box-shadow", "-6px 0 24px rgba(0,0,0,.08)")
+    .style("z-index", "4")
+    .style("display", "flex")
+    .style("flex-direction", "column")
     .style("color", "#111");
 
+  const tabs = ["Treemap", "Détails", "Filtres"];
+  const tabHeader = drawer
+    .append("div")
+    .style("display", "flex")
+    .style("gap", "6px")
+    .style("padding", "8px")
+    .style("border-bottom", "1px solid #eee")
+    .style("background", "#fafafa")
+    .style("color", "#111");
+
+  const tabBtns = {};
+  tabs.forEach((name) => {
+    tabBtns[name] = tabHeader
+      .append("button")
+      .text(name)
+      .style("padding", "6px 10px")
+      .style("border", "1px solid #ddd")
+      .style("border-radius", "8px")
+      .style("background", name === "Treemap" ? "#111" : "#fff")
+      .style("color", name === "Treemap" ? "#fff" : "#111")
+      .style("cursor", "pointer")
+      .on("click", () => showTab(name));
+  });
+
+  const tabBody = drawer
+    .append("div")
+    .style("flex", "1 1 auto")
+    .style("position", "relative")
+    .style("overflow", "hidden")
+    .style("color", "#111");
+
+  const tabTreemap = tabBody
+    .append("div")
+    .attr("id", "tab-treemap")
+    .style("position", "absolute")
+    .style("inset", "0")
+    .style("padding", "8px")
+    .style("overflow", "auto");
+
+  const tabDetails = tabBody
+    .append("div")
+    .attr("id", "tab-details")
+    .style("position", "absolute")
+    .style("inset", "0")
+    .style("padding", "8px")
+    .style("overflow", "auto")
+    .style("display", "none");
+
+  const tabFilters = tabBody
+    .append("div")
+    .attr("id", "tab-filters")
+    .style("position", "absolute")
+    .style("inset", "0")
+    .style("padding", "12px")
+    .style("overflow", "auto")
+    .style("display", "none");
+
+  function showTab(name) {
+    tabTreemap.style("display", name === "Treemap" ? null : "none");
+    tabDetails.style("display", name === "Détails" ? null : "none");
+    tabFilters.style("display", name === "Filtres" ? null : "none");
+    tabs.forEach((n) => {
+      tabBtns[n]
+        .style("background", n === name ? "#111" : "#fff")
+        .style("color", n === name ? "#fff" : "#111");
+    });
+  }
+
+  // Treemap title + svg
+  tabTreemap.html("");
+  const treemapTitle = tabTreemap
+    .append("div")
+    .style("font-weight", "700")
+    .style("margin", "2px 0 6px 2px")
+    .text("Répartition par ville");
+  const treemapSvg = tabTreemap
+    .append("svg")
+    .attr("width", PANEL_W - 16)
+    .attr("height", TREEMAP_H)
+    .style("border", "1px solid #eee")
+    .style("border-radius", "8px")
+    .style("background", "#fff");
+
+  // Détails (conteneur)
+  const detailsContainer = tabDetails.append("div").attr("id", "details-inner");
+
+  // Filtres + tooltips
   const unitStyle = "position:relative;display:flex;align-items:center;";
   const unitSpan =
     "position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#666;font-size:11px;pointer-events:none;";
   const inputCss =
     "width:100%;padding:6px 22px 6px 8px;border:1px solid #ddd;border-radius:6px;";
-
-  filterDiv.html(`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-weight:700;">Filtres investisseur</div>
-      <button id="f-close" title="Replier" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;">Replier</button>
-    </div>
-
+  tabFilters.html(`
+    <div style="font-weight:700;margin-bottom:10px;">Filtres investisseur</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div>
-        <label style="display:block;margin-bottom:4px;">Prix minimum <span style="color:#666">(€)</span></label>
+        <label style="display:block;margin-bottom:4px;">
+          Prix minimum
+          <span class="help-tip" data-tip="Prix demandé du bien. Écarte toutes les annonces en dessous de ce seuil (en euros).">?</span>
+          <span style="color:#666">(€)</span>
+        </label>
         <div style="${unitStyle}">
           <input type="number" id="f-price-min" placeholder="min" style="${inputCss}">
           <span style="${unitSpan}">€</span>
         </div>
       </div>
-
       <div>
-        <label style="display:block;margin-bottom:4px;">Prix maximum <span style="color:#666">(€)</span></label>
+        <label style="display:block;margin-bottom:4px;">
+          Prix maximum
+          <span class="help-tip" data-tip="Prix demandé du bien. Écarte toutes les annonces au-dessus de ce seuil (en euros).">?</span>
+          <span style="color:#666">(€)</span>
+        </label>
         <div style="${unitStyle}">
           <input type="number" id="f-price-max" placeholder="max" style="${inputCss}">
           <span style="${unitSpan}">€</span>
@@ -308,7 +284,11 @@
       </div>
 
       <div>
-        <label style="display:block;margin-bottom:4px;">EMI / revenu (max) <span style="color:#666">(ratio 0–1)</span></label>
+        <label style="display:block;margin-bottom:4px;">
+          EMI / revenu (max)
+          <span class="help-tip" data-tip="Ratio entre la mensualité de prêt (EMI) et le revenu mensuel net. Ex.: 0.35 = 35% du revenu.">?</span>
+          <span style="color:#666">(ratio 0–1)</span>
+        </label>
         <div style="${unitStyle}">
           <input type="number" step="0.01" id="f-emi-max" placeholder="0.35" style="${inputCss}">
           <span style="${unitSpan}">ratio</span>
@@ -318,11 +298,19 @@
 
       <div style="display:flex;align-items:center;gap:8px;">
         <input type="checkbox" id="f-legal-zero" style="cursor:pointer;">
-        <label for="f-legal-zero" style="margin:0;cursor:pointer;">Dossiers légaux = 0 uniquement <span style="color:#666">(nb de cas)</span></label>
+        <label for="f-legal-zero" style="margin:0;cursor:pointer;">
+          Dossiers légaux = 0 uniquement
+          <span class="help-tip" data-tip="Exclut les biens avec litiges/dossiers juridiques associés. Sélectionner = seulement les biens sans cas.">?</span>
+          <span style="color:#666">(nb de cas)</span>
+        </label>
       </div>
 
       <div>
-        <label style="display:block;margin-bottom:4px;">Note quartier (min) <span style="color:#666">(/10)</span></label>
+        <label style="display:block;margin-bottom:4px;">
+          Note quartier (min)
+          <span class="help-tip" data-tip="Qualité perçue du quartier (services, écoles, propreté...). Garde uniquement les biens avec une note ≥ seuil.">?</span>
+          <span style="color:#666">(/10)</span>
+        </label>
         <div style="${unitStyle}">
           <input type="number" id="f-neigh-min" min="0" max="10" style="${inputCss}">
           <span style="${unitSpan}">/10</span>
@@ -330,32 +318,87 @@
       </div>
 
       <div>
-        <label style="display:block;margin-bottom:4px;">Criminalité (max) <span style="color:#666">(nb de cas)</span></label>
+        <label style="display:block;margin-bottom:4px;">
+          Criminalité (max)
+          <span class="help-tip" data-tip="Nombre de cas de criminalité rapportés autour du bien. Écarte les zones au-dessus du seuil.">?</span>
+          <span style="color:#666">(nb de cas)</span>
+        </label>
         <div style="${unitStyle}">
           <input type="number" id="f-crime-max" style="${inputCss}">
           <span style="${unitSpan}">cas</span>
         </div>
       </div>
     </div>
-
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
-      <button id="f-reset" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;">Réinitialiser</button>
+      <button id="f-reset" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#111;">Réinitialiser</button>
       <button id="f-apply" style="padding:6px 10px;border:0;border-radius:6px;background:#111;color:#fff;cursor:pointer;">Appliquer</button>
     </div>
     <div id="f-stats" style="margin-top:6px;color:#555;"></div>
   `);
 
-  const collapseFilters = () => {
-    filterDiv.style("display", "none");
-    filterToggle.style("display", null);
-  };
-  const expandFilters = () => {
-    filterDiv.style("display", null);
-    filterToggle.style("display", "none");
-  };
-  filterWrapper.select("#f-close").on("click", collapseFilters);
-  filterToggle.on("click", expandFilters);
+  // Style + wiring des “?” (tooltips)
+  tabFilters
+    .selectAll(".help-tip")
+    .attr("title", function () {
+      return this.getAttribute("data-tip") || "";
+    }) // fallback natif
+    .style("display", "inline-flex")
+    .style("align-items", "center")
+    .style("justify-content", "center")
+    .style("width", "16px")
+    .style("height", "16px")
+    .style("font-size", "11px")
+    .style("line-height", "16px")
+    .style("border-radius", "50%")
+    .style("margin-left", "6px")
+    .style("background", "#111")
+    .style("color", "#fff")
+    .style("cursor", "help")
+    .text("?")
+    .on("mouseenter", function (event) {
+      const txt = this.getAttribute("data-tip") || "";
+      tooltip.style("opacity", 1).html(txt);
+    })
+    .on("mousemove", function (event) {
+      tooltip
+        .style("left", event.clientX + 12 + "px")
+        .style("top", event.clientY + 12 + "px");
+    })
+    .on("mouseleave", function () {
+      tooltip.style("opacity", 0);
+    });
 
+  // Poignée (bouton noir) — locale au container
+  const handle = container
+    .append("button")
+    .attr("id", "drawer-handle")
+    .text("⟨⟩")
+    .style("position", "absolute")
+    .style("top", MAP_H / 2 + "px")
+    .style("right", drawerOpen ? PANEL_W + 6 + "px" : "6px")
+    .style("transform", "translateY(-50%)")
+    .style("z-index", "5")
+    .style("padding", "8px 10px")
+    .style("border", "1px solid #111")
+    .style("border-radius", "8px")
+    .style("background", "#111")
+    .style("color", "#fff")
+    .style("cursor", "pointer")
+    .on("click", toggleDrawer);
+
+  function toggleDrawer() {
+    drawerOpen = !drawerOpen;
+    drawer.style("display", drawerOpen ? "flex" : "none");
+    handle.style("right", drawerOpen ? PANEL_W + 6 + "px" : "6px");
+    layout();
+    if (currentCountryName) {
+      resetZoom();
+    } else {
+      applyFiltersAndRender();
+    }
+  }
+
+  // ---- Réfs filtres
   const inputs = {
     priceMin: document.getElementById("f-price-min"),
     priceMax: document.getElementById("f-price-max"),
@@ -377,82 +420,33 @@
     crimeMax: null,
   };
 
-  // Données & état
+  // ---- Données/état
   let rowsAll = [];
-  let countries = [];
-  let countsCityCurrent = new Map();
   let rowsFilteredCurrent = [];
+  let countries = [];
+  let countriesByName = new Map();
+  let countsCityCurrent = new Map();
   let cityDB = [];
-  let countriesByName = new Map(); // name -> feature
-  let cityIndex = null; // city name -> candidates
+  let cityIndex = null;
+  let currentCountryName = null;
 
-  // MAIN
-  async function run() {
-    const [rowsRes, worldRes, citiesRes] = await Promise.allSettled([
-      d3.csv(CSV_PATH, d3.autoType),
-      d3.json(WORLD_URL),
-      d3.csv(CITY_DB_LOCAL, d3.autoType),
-    ]);
+  // Utils format
+  const fmt = d3.format(",.0f");
 
-    if (rowsRes.status !== "fulfilled" || worldRes.status !== "fulfilled") {
-      throw new Error("Données/carte introuvables.");
-    }
-
-    rowsAll = rowsRes.value;
-    const world = worldRes.value;
-    countries = topojson.feature(world, world.objects.countries).features;
-    countriesByName = new Map(countries.map((f) => [f.properties?.name, f]));
-
-    if (citiesRes.status === "fulfilled") {
-      cityDB = citiesRes.value; // city,country,lat,long
-      buildCityIndex();
-    } else {
-      console.warn("DB villes non chargée – points globaux désactivés.");
-    }
-
-    // init filtres
-    const pMin = d3.min(rowsAll, (d) => +d.price || 0) ?? 0;
-    const pMax = d3.max(rowsAll, (d) => +d.price || 0) ?? 0;
-    const crimeMax = d3.max(rowsAll, (d) => +d.crime_cases_reported || 0) ?? 0;
-    const emiMax = d3.max(rowsAll, (d) => +d.emi_to_income_ratio || 0) ?? 0.5;
-
-    inputs.priceMin.value = Math.floor(pMin);
-    inputs.priceMax.value = Math.ceil(pMax);
-    inputs.crimeMax.value = Math.ceil(crimeMax);
-    inputs.neighMin.value = 0;
-    inputs.emiMax.value = Math.min(0.5, +emiMax || 0.35).toFixed(2);
-
-    applyFiltersAndRender();
-
-    inputs.apply.addEventListener("click", () => {
-      readFilters();
-      applyFiltersAndRender();
-    });
-    inputs.reset.addEventListener("click", () => {
-      inputs.priceMin.value = Math.floor(pMin);
-      inputs.priceMax.value = Math.ceil(pMax);
-      inputs.emiMax.value = Math.min(0.5, +emiMax || 0.35).toFixed(2);
-      inputs.legal0.checked = false;
-      inputs.neighMin.value = 0;
-      inputs.crimeMax.value = Math.ceil(crimeMax);
-      readFilters();
-      applyFiltersAndRender();
-    });
-    ["input", "change"].forEach((evt) => {
-      [
-        inputs.priceMin,
-        inputs.priceMax,
-        inputs.emiMax,
-        inputs.legal0,
-        inputs.neighMin,
-        inputs.crimeMax,
-      ].forEach((el) =>
-        el.addEventListener(evt, () => {
-          readFilters();
-          applyFiltersAndRender();
-        })
-      );
-    });
+  function layout() {
+    const viewportW = Math.max(
+      document.documentElement.clientWidth,
+      window.innerWidth || 0
+    );
+    const reserved = drawerOpen ? PANEL_W + GAP : 0;
+    mapW = Math.max(480, viewportW - reserved - 24);
+    mapWrap.style("width", mapW + "px");
+    svg.attr("width", mapW).attr("height", MAP_H);
+    projection = d3
+      .geoNaturalEarth1()
+      .fitSize([mapW, MAP_H], { type: "Sphere" });
+    path = d3.geoPath(projection);
+    drawSphere();
   }
 
   function buildCityIndex() {
@@ -486,7 +480,6 @@
       const legal = +r.legal_cases_on_property || 0;
       const neigh = +r.neighbourhood_rating || 0;
       const crime = +r.crime_cases_reported || 0;
-
       if (filters.priceMin !== null && price < filters.priceMin) return false;
       if (filters.priceMax !== null && price > filters.priceMax) return false;
       if (filters.emiMax !== null && emi > filters.emiMax) return false;
@@ -512,7 +505,7 @@
         : "city";
 
     const countsCountryName = new Map();
-    const countsCity = new Map(); // `${country}|${city}` -> count
+    const countsCity = new Map();
 
     for (const r of rows) {
       let c = (r[countryCol] || "").toString().trim();
@@ -542,6 +535,70 @@
     });
 
     return { byFeature, countsCity };
+  }
+
+  function drawLegendLog(minPos, maxVal) {
+    gUI.selectAll(".legend").remove();
+    const legendW = 180,
+      legendH = 12,
+      gradId = "legendGradDyn";
+    const lg = defs.select(`#${gradId}`).empty()
+      ? defs
+          .append("linearGradient")
+          .attr("id", gradId)
+          .attr("x1", "0%")
+          .attr("x2", "100%")
+      : defs.select(`#${gradId}`);
+    lg.selectAll("stop").remove();
+    for (let i = 0; i <= 10; i++) {
+      lg.append("stop")
+        .attr("offset", `${i * 10}%`)
+        .attr("stop-color", d3.interpolateYlOrRd(i / 10));
+    }
+    const legend = gUI
+      .append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${mapW - legendW - 20},${MAP_H - 88})`);
+    legend
+      .append("text")
+      .text("Densité de biens (log)")
+      .attr("y", -6)
+      .attr("font-size", 12)
+      .attr("fill", "#333");
+    legend
+      .append("rect")
+      .attr("width", legendW)
+      .attr("height", legendH)
+      .attr("fill", `url(#${gradId})`);
+    legend
+      .append("text")
+      .text(minPos)
+      .attr("y", legendH + 14)
+      .attr("font-size", 11)
+      .attr("fill", "#333");
+    legend
+      .append("text")
+      .text(maxVal)
+      .attr("x", legendW)
+      .attr("y", legendH + 14)
+      .attr("text-anchor", "end")
+      .attr("font-size", 11)
+      .attr("fill", "#333");
+    legend
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", legendH + 24)
+      .attr("width", 12)
+      .attr("height", 12)
+      .attr("fill", OUT_OF_RANGE_FILL)
+      .attr("stroke", "#ddd");
+    legend
+      .append("text")
+      .text("Hors tranche (0)")
+      .attr("x", 18)
+      .attr("y", legendH + 34)
+      .attr("font-size", 11)
+      .attr("fill", "#333");
   }
 
   function renderMap(byFeature) {
@@ -585,13 +642,12 @@
       .on("mouseleave", () => tooltip.style("opacity", 0))
       .on("mouseenter", function (event, d) {
         const val = byFeature.get(d) || 0;
-        if (val > 0) {
+        if (val > 0)
           d3.select(this)
             .attr("stroke", HOVER_GLOW_COLOR)
             .attr("stroke-width", 1.5)
             .style("filter", "url(#hover-glow)")
             .raise();
-        }
       })
       .on("mouseout", function () {
         d3.select(this)
@@ -602,92 +658,11 @@
       .on("click", (event, d) => {
         const val = byFeature.get(d) || 0;
         if (val === 0) return;
-        collapseFilters();
+        currentCountryName = d.properties.name;
         zoomCountry(d);
       });
 
     return colorCountry;
-  }
-
-  // Helpers stats
-  const fmt = d3.format(",.0f");
-  const fmt1 = d3.format(",.1f");
-  function median(arr) {
-    if (!arr.length) return 0;
-    const a = arr.slice().sort((x, y) => x - y);
-    const m = Math.floor(a.length / 2);
-    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-  }
-  function summarize(rows) {
-    const n = rows.length;
-    if (!n) return { n: 0 };
-    const prices = rows.map((d) => +d.price || 0);
-    const rooms = rows.map((d) => +d.rooms || 0);
-    const baths = rows.map((d) => +d.bathrooms || 0);
-    const emi = rows.map((d) => +d.emi_to_income_ratio || 0);
-    const neigh = rows.map((d) => +d.neighbourhood_rating || 0);
-    const crime = rows.map((d) => +d.crime_cases_reported || 0);
-    const legal0 = rows.map((d) =>
-      (+d.legal_cases_on_property || 0) === 0 ? 1 : 0
-    );
-
-    return {
-      n,
-      avgPrice: d3.mean(prices) || 0,
-      medPrice: median(prices),
-      minPrice: d3.min(prices) || 0,
-      maxPrice: d3.max(prices) || 0,
-      avgRooms: d3.mean(rooms) || 0,
-      avgBaths: d3.mean(baths) || 0,
-      avgEmi: d3.mean(emi) || 0,
-      avgNeigh: d3.mean(neigh) || 0,
-      avgCrime: d3.mean(crime) || 0,
-      pctLegal0: (d3.mean(legal0) || 0) * 100,
-    };
-  }
-
-  function detailsHTML(title, stats, extraBlocks = []) {
-    // Retourne un bloc HTML (string) pour le foreignObject
-    if (!stats || !stats.n) {
-      return `<div style="padding:10px;color:#555;">Aucune donnée disponible pour <strong>${title}</strong> (après filtrage).</div>`;
-    }
-    const blocks = [
-      `<div style="font-weight:700;margin-bottom:6px;">${title}</div>`,
-      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;">
-        <div><span style="color:#666">Biens</span><br><strong>${fmt(
-          stats.n
-        )}</strong></div>
-        <div><span style="color:#666">Prix moyen (€)</span><br><strong>${fmt(
-          stats.avgPrice
-        )}</strong></div>
-        <div><span style="color:#666">Prix médian (€)</span><br><strong>${fmt(
-          stats.medPrice
-        )}</strong></div>
-        <div><span style="color:#666">Min–Max (€)</span><br><strong>${fmt(
-          stats.minPrice
-        )} – ${fmt(stats.maxPrice)}</strong></div>
-        <div><span style="color:#666">Pièces moy.</span><br><strong>${fmt1(
-          stats.avgRooms
-        )}</strong></div>
-        <div><span style="color:#666">Sdb moy.</span><br><strong>${fmt1(
-          stats.avgBaths
-        )}</strong></div>
-        <div><span style="color:#666">EMI / revenu (moy.)</span><br><strong>${fmt1(
-          stats.avgEmi
-        )}</strong></div>
-        <div><span style="color:#666">Note quartier (moy.)</span><br><strong>${fmt1(
-          stats.avgNeigh
-        )}</strong></div>
-        <div><span style="color:#666">Criminalité (moy.)</span><br><strong>${fmt1(
-          stats.avgCrime
-        )}</strong></div>
-        <div><span style="color:#666">% dossiers légaux = 0</span><br><strong>${fmt1(
-          stats.pctLegal0
-        )}%</strong></div>
-      </div>`,
-    ];
-    if (extraBlocks.length) blocks.push(...extraBlocks);
-    return `<div style="padding:10px;">${blocks.join("")}</div>`;
   }
 
   function applyFiltersAndRender() {
@@ -703,32 +678,42 @@
     ).size;
     inputs.stats.innerText = `${totalProps} biens | ${nbCountries} pays | ${nbCities} villes`;
 
-    // Reset couches détail / labels / points
-    gDetail.selectAll("*").remove();
+    // Reset couches
+    gLabels.selectAll("*").remove();
     gFocus.selectAll("*").remove();
     gCities.selectAll("*").remove();
-    gLabels.selectAll("*").remove();
     resetBtn.style("display", "none");
-    treemapToggle.style("display", "none");
-
     d3.selectAll([gCountries.node(), gFocus.node(), gCities.node()]).attr(
       "transform",
       null
     );
 
-    // Vue monde visible
+    // Affichage monde
     gSphere.style("display", null);
     gCountries.style("display", null);
 
-    // Carte pays
     renderMap(byFeature);
     countsCityCurrent = countsCity;
 
-    // Points des villes en VUE GLOBALE
+    // Points villes en vue globale
     if (cityIndex) drawGlobalCityPoints(countsCityCurrent);
+
+    // Tiroir : treemap/détails par défaut
+    treemapSvg.selectAll("*").remove();
+    tabTreemap.selectAll(".note-empty").remove();
+    treemapTitle.text("Répartition par ville");
+    tabTreemap
+      .append("div")
+      .attr("class", "note-empty")
+      .style("margin-top", "6px")
+      .style("color", "#666")
+      .text("Cliquez un pays pour afficher la treemap des villes.");
+    detailsContainer.html(
+      `<div style="color:#666">Cliquez une ville (ou un pays) pour voir la liste des biens.</div>`
+    );
+    showTab("Treemap");
   }
 
-  // ----- POINTS VILLES — VUE GLOBALE -----
   function drawGlobalCityPoints(countsCity) {
     const enriched = [];
     const values = [];
@@ -740,7 +725,6 @@
 
       const feat = countriesByName.get(worldName);
       let chosen = null;
-
       if (feat) {
         for (const c of candidates) {
           if (d3.geoContains(feat, [c.lon, c.lat])) {
@@ -781,10 +765,7 @@
       .attr("transform", (d) => `translate(${d.x},${d.y})`)
       .style("pointer-events", "auto")
       .style("cursor", "pointer")
-      .on("click", (event, d) => {
-        // Ouvre panneau DoD ville (sans zoom)
-        openCityDetailsPanel(d.country, d.city);
-      });
+      .on("click", (event, d) => openCityDetails(d.country, d.city));
 
     enter
       .append("circle")
@@ -807,83 +788,116 @@
       .on("mouseleave", () => tooltip.style("opacity", 0));
   }
 
-  // ----- Panneau DoD VILLE (vue globale, pas de zoom) -----
-  function openCityDetailsPanel(countryName, cityName) {
-    // Nettoie panneau et affiche un panneau au format identique
-    gDetail.selectAll("*").remove();
+  // ---- DÉTAILS BRUTS (table)
+  function renderDetailsTable(title, rows) {
+    if (!rows.length) {
+      detailsContainer.html(
+        `<div style="padding:10px;color:#666;">Aucun bien trouvé pour <strong>${title}</strong> (après filtrage).</div>`
+      );
+      return;
+    }
 
-    const panel = gDetail
-      .append("g")
-      .attr("transform", `translate(${PANEL_X},${PANEL_Y})`);
+    const columns = [
+      "city",
+      "property_type",
+      "furnishing_status",
+      "property_size_sqft",
+      "price",
+      "constructed_year",
+      "rooms",
+      "bathrooms",
+      "garage",
+      "garden",
+      "crime_cases_reported",
+      "legal_cases_on_property",
+      "neighbourhood_rating",
+      "connectivity_score",
+      "satisfaction_score",
+    ];
 
-    // Card
-    panel
-      .append("rect")
-      .attr("width", PANEL_W)
-      .attr("height", PANEL_H)
-      .attr("rx", 12)
-      .attr("fill", "#ffffff")
-      .attr("stroke", "#e5e7eb");
+    rows = rows.slice().sort((a, b) => (b.price || 0) - (a.price || 0));
 
-    // Header
-    panel
-      .append("text")
-      .text(`Détails — ${cityName}, ${countryName}`)
-      .attr("x", 16)
-      .attr("y", 22)
-      .attr("font-size", 13)
-      .attr("font-weight", 700)
-      .attr("fill", "#333");
+    const headerHTML = columns
+      .map(
+        (c) =>
+          `<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">${c.replace(
+            /_/g,
+            " "
+          )}</th>`
+      )
+      .join("");
+    const rowsHTML = rows
+      .map(
+        (r) => `
+      <tr>
+        ${columns
+          .map(
+            (c) =>
+              `<td style="padding:4px 8px;border-bottom:1px solid #eee;">${
+                r[c] ?? ""
+              }</td>`
+          )
+          .join("")}
+      </tr>`
+      )
+      .join("");
 
-    // Contenu scrollable via foreignObject
-    const inner = panel
-      .append("foreignObject")
-      .attr("x", 12)
-      .attr("y", 30)
-      .attr("width", PANEL_W - 24)
-      .attr("height", PANEL_H - 42);
-
-    const container = inner
-      .append("xhtml:div")
-      .style("width", PANEL_W - 24 + "px")
-      .style("height", PANEL_H - 42 + "px")
-      .style("overflow", "auto")
-      .style("font", "12px system-ui,Segoe UI,Roboto,Arial")
-      .style("color", "#111");
-
-    // Sous-échantillon de rows filtrées
-    const cityRows = rowsFilteredCurrent.filter((r) => {
-      const ctry = countriesByName.has(r.country)
-        ? r.country
-        : COUNTRY_ALIAS.get(r.country) || r.country;
-      return ctry === countryName && (r.city || r.City) === cityName;
-    });
-
-    const stats = summarize(cityRows);
-    container.html(detailsHTML(`Ville : ${cityName}`, stats));
+    detailsContainer.html(`
+      <div style="font-weight:700;margin-bottom:8px;color:#111;">${title}</div>
+      <div style="overflow:auto;max-height:calc(100vh - 180px);border:1px solid #ddd;border-radius:6px;">
+        <table style="border-collapse:collapse;width:100%;font-size:12px;color:#111;background:#fff;">
+          <thead style="background:#f9f9f9;position:sticky;top:0;">
+            <tr>${headerHTML}</tr>
+          </thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>
+      <div style="color:#555;font-size:12px;margin-top:6px;">${fmt(
+        rows.length
+      )} biens affichés</div>
+    `);
   }
 
-  // ----- ZOOM PAYS -> TREEMAP + DÉTAILS PAYS -----
+  function fillCountryDetails(countryName) {
+    const countryRows = rowsFilteredCurrent.filter((r) => {
+      const nn = COUNTRY_ALIAS.get(r.country) || r.country;
+      return nn === countryName;
+    });
+    renderDetailsTable(`Pays : ${countryName}`, countryRows);
+    showTab("Détails");
+  }
+
+  function openCityDetails(countryName, cityName) {
+    const cityRows = rowsFilteredCurrent.filter((r) => {
+      const nn = COUNTRY_ALIAS.get(r.country) || r.country;
+      const cc = r.city || r.City;
+      return nn === countryName && cc === cityName;
+    });
+    renderDetailsTable(`Ville : ${cityName}, ${countryName}`, cityRows);
+    showTab("Détails");
+  }
+
+  // ---- ZOOM PAYS
   function zoomCountry(feature) {
+    // Masquer monde + points
+    gSphere.style("display", "none");
+    gCountries.style("display", "none");
+    gCities.selectAll("*").remove();
+
+    // Nettoyer focus/labels
+    gFocus.selectAll("*").remove();
+    gLabels.selectAll("*").remove();
+
+    // Transform centrage
     const b = path.bounds(feature);
     const dx = b[1][0] - b[0][0];
     const dy = b[1][1] - b[0][1];
     const x = (b[0][0] + b[1][0]) / 2;
     const y = (b[0][1] + b[1][1]) / 2;
-    const scale = Math.min(8, 0.9 / Math.max(dx / width, dy / height));
-    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+    const scale = Math.min(8, 0.9 / Math.max(dx / mapW, dy / MAP_H));
+    const translate = [mapW / 2 - scale * x, MAP_H / 2 - scale * y];
 
-    // Masquer monde
-    gSphere.style("display", "none");
-    gCountries.style("display", "none");
-
-    // Nettoyer détail & points & labels
-    gDetail.selectAll("*").remove();
-    gFocus.selectAll("*").remove();
-    gCities.selectAll("*").remove();
-    gLabels.selectAll("*").remove();
-
-    // Fond blanc du pays (polygone SCALÉ)
+    // Fond pays (scalé)
     gFocus
       .attr("transform", `translate(${translate}) scale(${scale})`)
       .append("path")
@@ -892,7 +906,7 @@
       .attr("stroke", "#666")
       .attr("stroke-width", 0.8);
 
-    // Label NON-SCALÉ
+    // Label non-scalé
     const c = path.centroid(feature);
     const screenX = translate[0] + scale * c[0];
     const screenY = translate[1] + scale * c[1];
@@ -908,192 +922,186 @@
       .text(feature.properties.name);
 
     resetBtn.style("display", null);
-    treemapToggle.style("display", null);
-    treemapToggle.select("text").text(treemapVisible ? "−" : "+");
-    treemapToggle
-      .select("title")
-      .text(treemapVisible ? "Masquer la treemap" : "Afficher la treemap");
 
-    // Données villes du pays (post-filtrage)
+    // Treemap + Détails pour le pays
     const worldName = feature.properties.name;
     const entries = [];
     countsCityCurrent.forEach((count, key) => {
       const [kCountry, kCity] = key.split("|");
       if (kCountry === worldName) entries.push({ city: kCity, value: count });
     });
-
-    // Panneau treemap + détails (scroll)
-    drawCountryPanel(worldName, entries);
+    drawTreemapInPanel(worldName, entries);
+    fillCountryDetails(worldName);
+    showTab("Détails");
   }
 
-  // Panneau pays = treemap (haut) + détails (bas, scroll)
-  function drawCountryPanel(countryName, cityEntries) {
-    const panel = gDetail
-      .append("g")
-      .attr("transform", `translate(${PANEL_X},${PANEL_Y})`);
+  function drawTreemapInPanel(countryName, cityEntries) {
+    treemapSvg.selectAll("*").remove();
+    tabTreemap.selectAll(".note-empty").remove();
+    treemapTitle.text(`Répartition par ville — ${countryName}`);
 
-    // Card
-    panel
-      .append("rect")
-      .attr("width", PANEL_W)
-      .attr("height", PANEL_H)
-      .attr("rx", 12)
-      .attr("fill", "#ffffff")
-      .attr("stroke", "#e5e7eb");
-
-    // Header
-    panel
-      .append("text")
-      .text(`Répartition par ville — ${countryName}`)
-      .attr("x", 16)
-      .attr("y", 22)
-      .attr("font-size", 13)
-      .attr("font-weight", 700)
-      .attr("fill", "#333");
-
-    // Bloc treemap (toggle +/−)
-    const treemapBlock = panel
-      .append("g")
-      .attr("class", "treemap-block")
-      .attr("transform", `translate(20,36)`);
-
-    if (cityEntries.length) {
-      const root = d3
-        .hierarchy({ name: "root", children: cityEntries })
-        .sum((d) => d.value);
-
-      const vals = cityEntries.map((d) => d.value);
-      const minV = d3.min(vals) || 1;
-      let maxV = d3.max(vals) || minV;
-      if (maxV < minV) maxV = minV;
-
-      const color = d3
-        .scaleLog()
-        .domain([minV, maxV])
-        .range([d3.interpolateYlOrRd(0.08), d3.interpolateYlOrRd(1)])
-        .clamp(true);
-
-      d3
-        .treemap()
-        .size([PANEL_W - 40, TREEMAP_H]) // largeur = PANEL_W-2*20 ; hauteur = TREEMAP_H
-        .paddingInner(2)
-        .paddingOuter(0)(root);
-
-      const nodes = treemapBlock
-        .selectAll("g.node")
-        .data(root.leaves())
-        .join("g")
-        .attr("class", "node")
-        .attr("transform", (d) => `translate(${d.x0},${d.y0})`);
-
-      nodes
-        .append("rect")
-        .attr("width", (d) => Math.max(0, d.x1 - d.x0))
-        .attr("height", (d) => Math.max(0, d.y1 - d.y0))
-        .attr("fill", (d) => color(d.data.value))
-        .attr("stroke", "rgba(255,255,255,0.8)")
-        .attr("stroke-width", 0.8)
-        .on("mousemove", (event, d) => {
-          tooltip
-            .style("opacity", 1)
-            .html(`<strong>${d.data.city}</strong><br/>Biens: ${d.data.value}`)
-            .style("left", event.clientX + 12 + "px")
-            .style("top", event.clientY + 12 + "px");
-        })
-        .on("mouseleave", () => tooltip.style("opacity", 0));
-
-      nodes
-        .append("text")
-        .attr("x", 4)
-        .attr("y", 14)
-        .attr("font-size", 11)
-        .attr("fill", "#111")
-        .text((d) => d.data.city)
-        .each(function (d) {
-          const w = d.x1 - d.x0,
-            h = d.y1 - d.y0;
-          if (w < 60 || h < 20) d3.select(this).style("display", "none");
-        });
-
-      nodes
-        .append("text")
-        .attr("x", 4)
-        .attr("y", 28)
-        .attr("font-size", 10)
-        .attr("fill", "#333")
-        .text((d) => d.data.value)
-        .each(function (d) {
-          const w = d.x1 - d.x0,
-            h = d.y1 - d.y0;
-          if (w < 60 || h < 28) d3.select(this).style("display", "none");
-        });
-    } else {
-      treemapBlock
-        .append("text")
-        .text("Aucune ville disponible (après filtrage).")
-        .attr("x", 0)
-        .attr("y", 16)
-        .attr("font-size", 12)
-        .attr("fill", "#777");
+    if (!cityEntries.length) {
+      tabTreemap
+        .append("div")
+        .style("margin-top", "6px")
+        .style("color", "#666")
+        .text("Aucune ville disponible (après filtrage).");
+      return;
     }
 
-    // --- Bloc DÉTAILS PAYS (scroll) ---
-    const detailsY = 36 + TREEMAP_H + 8;
-    const inner = panel
-      .append("foreignObject")
-      .attr("x", 12)
-      .attr("y", detailsY)
-      .attr("width", PANEL_W - 24)
-      .attr("height", PANEL_H - detailsY - 8);
+    const layoutW = +treemapSvg.attr("width");
+    const layoutH = +treemapSvg.attr("height");
 
-    const container = inner
-      .append("xhtml:div")
-      .style("width", PANEL_W - 24 + "px")
-      .style("height", PANEL_H - detailsY - 8 + "px")
-      .style("overflow", "auto")
-      .style("font", "12px system-ui,Segoe UI,Roboto,Arial")
-      .style("color", "#111");
+    const root = d3
+      .hierarchy({ name: "root", children: cityEntries })
+      .sum((d) => d.value);
 
-    // Lignes filtrées pour ce pays
-    const countryRows = rowsFilteredCurrent.filter((r) => {
-      const nn = COUNTRY_ALIAS.get(r.country) || r.country;
-      return nn === countryName;
+    const vals = cityEntries.map((d) => d.value);
+    const minV = d3.min(vals) || 1;
+    let maxV = d3.max(vals) || minV;
+    if (maxV < minV) maxV = minV;
+
+    const color = d3
+      .scaleLog()
+      .domain([minV, maxV])
+      .range([d3.interpolateYlOrRd(0.08), d3.interpolateYlOrRd(1)])
+      .clamp(true);
+
+    d3
+      .treemap()
+      .size([layoutW - 16, layoutH - 16])
+      .paddingInner(2)
+      .paddingOuter(8)(root);
+
+    const gCells = treemapSvg.append("g").attr("transform", `translate(0,0)`);
+
+    const nodes = gCells
+      .selectAll("g.node")
+      .data(root.leaves())
+      .join("g")
+      .attr("class", "node")
+      .attr("transform", (d) => `translate(${d.x0},${d.y0})`);
+
+    nodes
+      .append("rect")
+      .attr("width", (d) => Math.max(0, d.x1 - d.x0))
+      .attr("height", (d) => Math.max(0, d.y1 - d.y0))
+      .attr("fill", (d) => color(d.data.value))
+      .attr("stroke", "rgba(255,255,255,0.8)")
+      .attr("stroke-width", 0.8)
+      .on("mousemove", (event, d) => {
+        tooltip
+          .style("opacity", 1)
+          .html(`<strong>${d.data.city}</strong><br/>Biens: ${d.data.value}`)
+          .style("left", event.clientX + 12 + "px")
+          .style("top", event.clientY + 12 + "px");
+      })
+      .on("mouseleave", () => tooltip.style("opacity", 0));
+
+    nodes
+      .append("text")
+      .attr("x", 4)
+      .attr("y", 14)
+      .attr("font-size", 11)
+      .attr("fill", "#111")
+      .text((d) => d.data.city)
+      .each(function (d) {
+        const w = d.x1 - d.x0,
+          h = d.y1 - d.y0;
+        if (w < 60 || h < 20) d3.select(this).style("display", "none");
+      });
+
+    nodes
+      .append("text")
+      .attr("x", 4)
+      .attr("y", 28)
+      .attr("font-size", 10)
+      .attr("fill", "#333")
+      .text((d) => d.data.value)
+      .each(function (d) {
+        const w = d.x1 - d.x0,
+          h = d.y1 - d.y0;
+        if (w < 60 || h < 28) d3.select(this).style("display", "none");
+      });
+  }
+
+  function resetZoom() {
+    currentCountryName = null;
+    applyFiltersAndRender();
+  }
+
+  // ---- RUN
+  async function run() {
+    const [rowsRes, worldRes, citiesRes] = await Promise.allSettled([
+      d3.csv(CSV_PATH, d3.autoType),
+      d3.json(WORLD_URL),
+      d3.csv(CITY_DB_LOCAL, d3.autoType),
+    ]);
+    if (rowsRes.status !== "fulfilled" || worldRes.status !== "fulfilled") {
+      throw new Error("Données/carte introuvables.");
+    }
+    rowsAll = rowsRes.value;
+    const world = worldRes.value;
+    countries = topojson.feature(world, world.objects.countries).features;
+    countriesByName = new Map(countries.map((f) => [f.properties?.name, f]));
+
+    if (citiesRes.status === "fulfilled") {
+      cityDB = citiesRes.value;
+      buildCityIndex();
+    } else {
+      console.warn("DB villes non chargée – points globaux désactivés.");
+    }
+
+    // init filtres
+    const pMin = d3.min(rowsAll, (d) => +d.price || 0) ?? 0;
+    const pMax = d3.max(rowsAll, (d) => +d.price || 0) ?? 0;
+    const crimeMax = d3.max(rowsAll, (d) => +d.crime_cases_reported || 0) ?? 0;
+    const emiMax = d3.max(rowsAll, (d) => +d.emi_to_income_ratio || 0) ?? 0.5;
+
+    inputs.priceMin.value = Math.floor(pMin);
+    inputs.priceMax.value = Math.ceil(pMax);
+    inputs.crimeMax.value = Math.ceil(crimeMax);
+    inputs.neighMin.value = 0;
+    inputs.emiMax.value = Math.min(0.5, +emiMax || 0.35).toFixed(2);
+
+    showTab("Treemap");
+    tabTreemap
+      .append("div")
+      .attr("class", "note-empty")
+      .style("margin-top", "6px")
+      .style("color", "#666")
+      .text("Cliquez un pays pour afficher la treemap des villes.");
+
+    inputs.apply.addEventListener("click", () => {
+      readFilters();
+      applyFiltersAndRender();
+      showTab("Treemap");
+    });
+    inputs.reset.addEventListener("click", () => {
+      inputs.priceMin.value = Math.floor(pMin);
+      inputs.priceMax.value = Math.ceil(pMax);
+      inputs.emiMax.value = Math.min(0.5, +emiMax || 0.35).toFixed(2);
+      inputs.legal0.checked = false;
+      inputs.neighMin.value = 0;
+      inputs.crimeMax.value = Math.ceil(crimeMax);
+      readFilters();
+      applyFiltersAndRender();
+      showTab("Treemap");
     });
 
-    const stats = summarize(countryRows);
+    layout();
+    applyFiltersAndRender();
 
-    // Top 10 villes (dans ce pays)
-    const byCity = d3
-      .rollups(
-        countryRows,
-        (v) => v.length,
-        (d) => d.city || d.City
-      )
-      .sort((a, b) => d3.descending(a[1], b[1]))
-      .slice(0, 10);
-
-    const topCityHTML = `
-      <div style="margin-top:8px;">
-        <div style="font-weight:700;margin-bottom:4px;">Top villes (par nb de biens)</div>
-        <ol style="margin:0;padding-left:18px;">
-          ${byCity
-            .map(([c, n]) => `<li>${c}: <strong>${fmt(n)}</strong></li>`)
-            .join("")}
-        </ol>
-      </div>`;
-
-    container.html(detailsHTML(`Pays : ${countryName}`, stats, [topCityHTML]));
+    window.addEventListener("resize", () => {
+      layout();
+      if (currentCountryName) resetZoom();
+      else applyFiltersAndRender();
+    });
   }
 
-  // ---------- Reset ----------
-  function resetZoom() {
-    applyFiltersAndRender(); // réaffiche monde + points + enlève treemap/labels
-  }
-
-  // ---- Lancement ----
   run().catch((err) => {
     console.error(err);
-    root
+    container
       .append("p")
       .style("color", "crimson")
       .text(
